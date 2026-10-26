@@ -345,69 +345,55 @@ def main():
         agg["registered_po"] += r["registered_po"]
         agg["aging_qty"][r["aging_bucket"]] += r["qty"]
 
-    # Calculate 4-month stock projection per item
-    # Starting stock = total_qty
-    # For each month: Ending = Previous_Ending + Incoming - Demand
+    # Calculate Stock Projection & Balance per item (matching AR COVERS format):
+    # Balance = Current On-Hand - Total Demand
+    # Final Free Stock = Balance + Total Incoming = Current On-Hand + Total Incoming - Total Demand
     projections = []
     for it, agg in item_aggregates.items():
         start_stock = agg["total_qty"]
         m_inc = monthly_incoming.get(it, {pm: 0.0 for pm in proj_months}).copy()
-        # If item has registered_po from Details.xlsx not already captured, allocate to Month 1
         if agg["registered_po"] > sum(m_inc.values()):
             diff = agg["registered_po"] - sum(m_inc.values())
             m_inc[proj_months[0]] += diff
 
-        m1_inc = m_inc[proj_months[0]]
-        m2_inc = m_inc[proj_months[1]]
-        m3_inc = m_inc[proj_months[2]]
-        m4_inc = m_inc[proj_months[3]]
+        total_inc = round(sum(m_inc.values()), 2)
+        total_demand = round(sum(agg["monthly_demand"].values()), 2)
 
-        m_dem = agg["monthly_demand"]
-        m1_d = m_dem[proj_months[0]]
-        m2_d = m_dem[proj_months[1]]
-        m3_d = m_dem[proj_months[2]]
-        m4_d = m_dem[proj_months[3]]
-
-        m1_end = round(start_stock + m1_inc - m1_d, 2)
-        m2_end = round(m1_end + m2_inc - m2_d, 2)
-        m3_end = round(m2_end + m3_inc - m3_d, 2)
-        m4_end = round(m3_end + m4_inc - m4_d, 2)
-
-        total_inc = round(m1_inc + m2_inc + m3_inc + m4_inc, 2)
-        total_demand = round(m1_d + m2_d + m3_d + m4_d, 2)
-        free_stock = m4_end
+        balance = round(start_stock - total_demand, 2)
+        free_stock = round(start_stock + total_inc - total_demand, 2)
 
         # Average weekly consumption (AWS) = total_demand / (4 months * 4.33 weeks)
         avg_weekly_demand = (total_demand / 17.3) if total_demand > 0 else 0.0
         aws = round(start_stock / avg_weekly_demand, 1) if avg_weekly_demand > 0 else 999.0
 
+        uom = "SqFt" if agg["item"].startswith("LH-01") else ("Meter" if agg["item"].startswith("LH-07") else "Yard")
+        free_stock_cost = round(max(0, free_stock) * agg["standard_cost"], 2)
+        free_stock_tax = round(free_stock_cost * 1.2096, 2)
+
+        status = "Surplus"
+        if free_stock < 0:
+            status = "Deficit"
+        elif aws > 0 and aws < 4:
+            status = "Low Buffer"
+        elif aws >= 4 and aws <= 16:
+            status = "Balanced"
+
         projections.append({
             "item": agg["item"],
             "customer": agg["customer"],
             "description": agg["description"],
+            "supplier": agg["supplier"],
+            "uom": uom,
             "standard_cost": agg["standard_cost"],
-            "starting_stock": round(start_stock, 2),
-            "m1_incoming": round(m1_inc, 2),
-            "m1_demand": round(m1_d, 2),
-            "m1_ending": m1_end,
-            "m2_incoming": round(m2_inc, 2),
-            "m2_demand": round(m2_d, 2),
-            "m2_ending": m2_end,
-            "m3_incoming": round(m3_inc, 2),
-            "m3_demand": round(m3_d, 2),
-            "m3_ending": m3_end,
-            "m4_incoming": round(m4_inc, 2),
-            "m4_demand": round(m4_d, 2),
-            "m4_ending": m4_end,
-            "total_incoming": total_inc,
-            "total_demand": total_demand,
+            "on_hand": round(start_stock, 2),
+            "incoming": total_inc,
+            "demand": total_demand,
+            "balance": balance,
             "free_stock": free_stock,
+            "free_stock_cost": free_stock_cost,
+            "free_stock_tax": free_stock_tax,
             "aws": aws if aws < 999 else "No Demand",
-            "aging_0_3": round(agg["aging_qty"]["0-3 months"], 2),
-            "aging_3_6": round(agg["aging_qty"]["3-6 months"], 2),
-            "aging_6_12": round(agg["aging_qty"]["6-12 months"], 2),
-            "aging_12_24": round(agg["aging_qty"]["12-24 months"], 2),
-            "aging_24plus": round(agg["aging_qty"]["+24 months"], 2),
+            "status": status,
             "total_cost": round(agg["total_cost"], 2),
             "total_after_tax": round(agg["total_after_tax"], 2)
         })
