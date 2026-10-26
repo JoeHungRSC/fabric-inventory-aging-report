@@ -352,32 +352,14 @@ export default function App() {
               RS
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold text-slate-900 leading-tight">
-                  Fabric &amp; Leather Inventory Aging Report
-                </h1>
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                  Dynamics 365 Verified
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                Monthly stock valuation, import tax liability (12% Duty, 8% VAT), and 4-month demand projection
-              </p>
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+                Fabric &amp; Leather Inventory Aging Report
+              </h1>
             </div>
           </div>
 
           <div className="flex items-center gap-2 self-start md:self-auto">
-            <button
-              onClick={exportToCSV}
-              type="button"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md text-white bg-slate-800 hover:bg-slate-900 border border-slate-700 transition-colors focus-visible:ring-2 focus-visible:ring-slate-800"
-            >
-              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Export CSV ({filteredRecords.length.toLocaleString()})
-            </button>
-            <div className="text-right hidden sm:block pl-3 border-l border-slate-200">
+            <div className="text-right pl-3">
               <div className="text-[11px] text-slate-500 font-medium">As of Date</div>
               <div className="text-xs font-semibold text-slate-800">{data.metadata.generated_at.slice(0, 10)}</div>
             </div>
@@ -451,17 +433,36 @@ export default function App() {
         </section>
 
         {/* Filter Controls Bar */}
-        <section aria-label="Report Filters" className="bg-white p-4 rounded-lg border border-slate-200 shadow-2xs">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 items-end">
+        <section aria-label="Report Filters" className="bg-slate-900 text-white p-5 rounded-xl border border-slate-800 shadow-sm">
+          <div className="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                Filter &amp; Drill-down Console
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded border border-slate-700 font-semibold transition-colors flex items-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Reset All Filters
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3.5 items-end">
             <div>
-              <label htmlFor="customer-filter" className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor="customer-filter" className="block text-xs font-semibold text-slate-300 mb-1.5">
                 Customer Account
               </label>
               <select
                 id="customer-filter"
                 value={selectedCustomer}
                 onChange={(e) => { setSelectedCustomer(e.target.value); setCurrentPage(1); }}
-                className="w-full text-xs rounded-md border-slate-300 bg-white py-1.5 px-2.5 text-slate-800 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+                className="w-full text-xs rounded-lg border-slate-700 bg-slate-800 text-white py-2 px-3 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-medium"
               >
                 <option value="ALL">All Customers ({data.metadata.customers.length})</option>
                 {data.metadata.customers.map((c) => (
@@ -471,14 +472,14 @@ export default function App() {
             </div>
 
             <div>
-              <label htmlFor="group-filter" className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor="group-filter" className="block text-xs font-semibold text-slate-300 mb-1.5">
                 Material Group
               </label>
               <select
                 id="group-filter"
                 value={selectedGroup}
                 onChange={(e) => { setSelectedGroup(e.target.value); setCurrentPage(1); }}
-                className="w-full text-xs rounded-md border-slate-300 bg-white py-1.5 px-2.5 text-slate-800 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+                className="w-full text-xs rounded-lg border-slate-700 bg-slate-800 text-white py-2 px-3 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-medium"
               >
                 <option value="ALL">All Material Groups</option>
                 {data.metadata.product_groups.map((g) => (
@@ -488,14 +489,14 @@ export default function App() {
             </div>
 
             <div>
-              <label htmlFor="aging-filter" className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor="aging-filter" className="block text-xs font-semibold text-slate-300 mb-1.5">
                 Aging Period
               </label>
               <select
                 id="aging-filter"
                 value={selectedAging}
                 onChange={(e) => { setSelectedAging(e.target.value); setCurrentPage(1); }}
-                className="w-full text-xs rounded-md border-slate-300 bg-white py-1.5 px-2.5 text-slate-800 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+                className="w-full text-xs rounded-lg border-slate-700 bg-slate-800 text-white py-2 px-3 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-medium"
               >
                 <option value="ALL">All Periods (0 to 24+ mos)</option>
                 <option value="0-3 months">0-3 months (0-89 days)</option>
@@ -507,14 +508,14 @@ export default function App() {
             </div>
 
             <div>
-              <label htmlFor="warehouse-filter" className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor="warehouse-filter" className="block text-xs font-semibold text-slate-300 mb-1.5">
                 Warehouse Location
               </label>
               <select
                 id="warehouse-filter"
                 value={selectedWarehouse}
                 onChange={(e) => { setSelectedWarehouse(e.target.value); setCurrentPage(1); }}
-                className="w-full text-xs rounded-md border-slate-300 bg-white py-1.5 px-2.5 text-slate-800 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+                className="w-full text-xs rounded-lg border-slate-700 bg-slate-800 text-white py-2 px-3 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-medium"
               >
                 <option value="ALL">All Warehouses ({data.metadata.warehouses.length})</option>
                 {data.metadata.warehouses.map((w) => (
@@ -523,73 +524,73 @@ export default function App() {
               </select>
             </div>
 
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <label htmlFor="search-input" className="block text-xs font-semibold text-slate-700 mb-1">
-                  Search Item / Batch / PO
-                </label>
-                <input
-                  id="search-input"
-                  type="text"
-                  placeholder="e.g. LH-03-1850 or BN0085962..."
-                  value={searchQuery}
-                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                  className="w-full text-xs rounded-md border-slate-300 bg-white py-1.5 px-2.5 text-slate-800 placeholder-slate-400 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-md transition-colors"
-                title="Reset all filters"
-              >
-                Reset
-              </button>
+            <div>
+              <label htmlFor="search-input" className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Search Item / Batch / PO
+              </label>
+              <input
+                id="search-input"
+                type="text"
+                placeholder="Item #, Batch, PO..."
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                className="w-full text-xs rounded-lg border-slate-700 bg-slate-800 text-white placeholder-slate-400 py-2 px-3 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-medium"
+              />
             </div>
           </div>
         </section>
 
         {/* Tab Selection */}
-        <div className="border-b border-slate-200 flex items-center justify-between">
-          <nav className="flex space-x-6" aria-label="Dashboard Views">
+        <div className="bg-slate-200/90 p-1.5 rounded-xl border border-slate-300 shadow-inner flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+          <nav className="flex flex-wrap gap-1.5" aria-label="Dashboard Views">
             <button
               type="button"
               onClick={() => setActiveTab('overview')}
-              className={`pb-3 px-1 text-sm font-semibold border-b-2 transition-colors ${
+              className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
                 activeTab === 'overview'
-                  ? 'border-blue-600 text-blue-800'
-                  : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+                  ? 'bg-blue-900 text-white shadow-md border border-blue-950'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-300/80 shadow-2xs'
               }`}
             >
-              Overview &amp; Aging Breakdown
+              <span>Overview &amp; Aging Breakdown</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('projection')}
-              className={`pb-3 px-1 text-sm font-semibold border-b-2 transition-colors ${
+              className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
                 activeTab === 'projection'
-                  ? 'border-blue-600 text-blue-800'
-                  : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+                  ? 'bg-blue-900 text-white shadow-md border border-blue-950'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-300/80 shadow-2xs'
               }`}
             >
-              4-Month Stock Projection ({filteredProjections.length})
+              <span>4-Month Stock Projection</span>
+              <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                activeTab === 'projection' ? 'bg-blue-800 text-white' : 'bg-slate-100 text-slate-700'
+              }`}>
+                {filteredProjections.length.toLocaleString()}
+              </span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('explorer')}
-              className={`pb-3 px-1 text-sm font-semibold border-b-2 transition-colors ${
+              className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
                 activeTab === 'explorer'
-                  ? 'border-blue-600 text-blue-800'
-                  : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+                  ? 'bg-blue-900 text-white shadow-md border border-blue-950'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-300/80 shadow-2xs'
               }`}
             >
-              Batch Explorer &amp; Audit ({filteredRecords.length.toLocaleString()})
+              <span>Batch Explorer &amp; Audit</span>
+              <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                activeTab === 'explorer' ? 'bg-blue-800 text-white' : 'bg-slate-100 text-slate-700'
+              }`}>
+                {filteredRecords.length.toLocaleString()}
+              </span>
             </button>
           </nav>
 
-          <span className="text-xs text-slate-500 hidden md:inline">
-            Showing {filteredRecords.length.toLocaleString()} matching records
-          </span>
+          <div className="text-xs font-semibold text-slate-700 px-3 hidden lg:block">
+            {filteredRecords.length.toLocaleString()} batches in scope
+          </div>
         </div>
 
         {/* View 1: Overview & Aging Breakdown */}
@@ -644,9 +645,6 @@ export default function App() {
                 <h2 className="text-sm font-bold text-slate-900">
                   Aging Tier Valuation &amp; Statutory Tax Liability Matrix
                 </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Calculation details: Import Duty (12% of Total Cost), VAT (8% of Total Cost + Import Duty), Total Post-Tax Liability.
-                </p>
               </div>
 
               <div className="overflow-x-auto">
