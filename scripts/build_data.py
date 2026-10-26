@@ -110,6 +110,7 @@ def main():
     print("Step 3: Loading Demand & Allocation from Reference...")
     demand_by_part = {}
     monthly_demand = {}
+    monthly_incoming = {}
     # Define 4 projection months
     proj_months = ["2026-11", "2026-12", "2027-01", "2027-02"]
 
@@ -117,37 +118,62 @@ def main():
         wb_ref = openpyxl.load_workbook(ref_file, data_only=True)
         ws_dem = wb_ref["Demand"]
         # Demand cols: Col 6 = PART NUMBER, Col 8 = RE QDATE, Col 9 = TOTAL PLANNED ISSUE QTY
+        # Incoming PO cols: Col 14 = QTYALLOCATED PO (col index 13), Col 21 = PO ETA (col index 20)
         for r in range(3, ws_dem.max_row + 1):
             part = ws_dem.cell(r, 6).value
             req_date = ws_dem.cell(r, 8).value
             qty = ws_dem.cell(r, 9).value
-            if part and qty:
+            po_qty = ws_dem.cell(r, 14).value
+            po_eta = ws_dem.cell(r, 21).value
+
+            if part:
                 p_key = str(part).strip().upper()
-                try:
-                    q_val = float(qty)
-                except:
-                    q_val = 0.0
-                demand_by_part[p_key] = demand_by_part.get(p_key, 0.0) + q_val
 
-                # Determine month
-                m_str = None
-                if req_date:
-                    d_s = str(req_date).strip()
-                    # e.g. "02 Nov 2026"
-                    for pm in proj_months:
-                        y, m = pm.split("-")
-                        month_abbr = datetime.strptime(m, "%m").strftime("%b")
-                        if month_abbr in d_s and y in d_s:
-                            m_str = pm
-                            break
-                if not m_str:
-                    m_str = proj_months[0]
+                # Process Demand
+                if qty:
+                    try:
+                        q_val = float(qty)
+                    except:
+                        q_val = 0.0
+                    demand_by_part[p_key] = demand_by_part.get(p_key, 0.0) + q_val
 
-                if p_key not in monthly_demand:
-                    monthly_demand[p_key] = {pm: 0.0 for pm in proj_months}
-                monthly_demand[p_key][m_str] += q_val
+                    # Determine demand month
+                    m_str = None
+                    if req_date:
+                        d_s = str(req_date).strip().upper()
+                        for pm in proj_months:
+                            y, m = pm.split("-")
+                            month_abbr = datetime.strptime(m, "%m").strftime("%b").upper()
+                            if month_abbr in d_s and y in d_s:
+                                m_str = pm
+                                break
+                    if not m_str:
+                        m_str = proj_months[0]
+
+                    if p_key not in monthly_demand:
+                        monthly_demand[p_key] = {pm: 0.0 for pm in proj_months}
+                    monthly_demand[p_key][m_str] += q_val
+
+                # Process Incoming PO
+                if po_qty:
+                    try:
+                        po_val = float(po_qty)
+                    except:
+                        po_val = 0.0
+                    if po_val > 0:
+                        m_inc_str = proj_months[0]
+                        if po_eta:
+                            eta_s = str(po_eta).strip().upper()
+                            if "DEC" in eta_s: m_inc_str = "2026-12"
+                            elif "JAN" in eta_s: m_inc_str = "2027-01"
+                            elif "FEB" in eta_s: m_inc_str = "2027-02"
+                            elif "NOV" in eta_s: m_inc_str = "2026-11"
+                        if p_key not in monthly_incoming:
+                            monthly_incoming[p_key] = {pm: 0.0 for pm in proj_months}
+                        monthly_incoming[p_key][m_inc_str] += po_val
 
     print(f"Loaded demand for {len(demand_by_part)} distinct parts.")
+    print(f"Loaded incoming POs for {len(monthly_incoming)} distinct parts.")
 
     print("Step 4: Processing Details.xlsx...")
     wb_d = openpyxl.load_workbook("Details.xlsx", read_only=True)
@@ -321,29 +347,35 @@ def main():
 
     # Calculate 4-month stock projection per item
     # Starting stock = total_qty
-    # Incoming = registered_po (allocated in Month 1 or evenly)
-    # Month 1 ending = Starting + Incoming - M1_demand
-    # Month 2 ending = M1_ending - M2_demand
-    # Month 3 ending = M2_ending - M3_demand
-    # Month 4 ending = M3_ending - M4_demand
+    # For each month: Ending = Previous_Ending + Incoming - Demand
     projections = []
     for it, agg in item_aggregates.items():
         start_stock = agg["total_qty"]
-        inbound = agg["registered_po"]
-        m_dem = agg["monthly_demand"]
+        m_inc = monthly_incoming.get(it, {pm: 0.0 for pm in proj_months}).copy()
+        # If item has registered_po from Details.xlsx not already captured, allocate to Month 1
+        if agg["registered_po"] > sum(m_inc.values()):
+            diff = agg["registered_po"] - sum(m_inc.values())
+            m_inc[proj_months[0]] += diff
 
+        m1_inc = m_inc[proj_months[0]]
+        m2_inc = m_inc[proj_months[1]]
+        m3_inc = m_inc[proj_months[2]]
+        m4_inc = m_inc[proj_months[3]]
+
+        m_dem = agg["monthly_demand"]
         m1_d = m_dem[proj_months[0]]
         m2_d = m_dem[proj_months[1]]
         m3_d = m_dem[proj_months[2]]
         m4_d = m_dem[proj_months[3]]
 
-        m1_end = round(start_stock + inbound - m1_d, 2)
-        m2_end = round(m1_end - m2_d, 2)
-        m3_end = round(m2_end - m3_d, 2)
-        m4_end = round(m3_end - m4_d, 2)
+        m1_end = round(start_stock + m1_inc - m1_d, 2)
+        m2_end = round(m1_end + m2_inc - m2_d, 2)
+        m3_end = round(m2_end + m3_inc - m3_d, 2)
+        m4_end = round(m3_end + m4_inc - m4_d, 2)
 
-        free_stock = round(start_stock + inbound - agg["demand"], 2)
+        total_inc = round(m1_inc + m2_inc + m3_inc + m4_inc, 2)
         total_demand = round(m1_d + m2_d + m3_d + m4_d, 2)
+        free_stock = m4_end
 
         # Average weekly consumption (AWS) = total_demand / (4 months * 4.33 weeks)
         avg_weekly_demand = (total_demand / 17.3) if total_demand > 0 else 0.0
@@ -355,18 +387,22 @@ def main():
             "description": agg["description"],
             "standard_cost": agg["standard_cost"],
             "starting_stock": round(start_stock, 2),
-            "incoming_stock": round(inbound, 2),
+            "m1_incoming": round(m1_inc, 2),
+            "m1_demand": round(m1_d, 2),
+            "m1_ending": m1_end,
+            "m2_incoming": round(m2_inc, 2),
+            "m2_demand": round(m2_d, 2),
+            "m2_ending": m2_end,
+            "m3_incoming": round(m3_inc, 2),
+            "m3_demand": round(m3_d, 2),
+            "m3_ending": m3_end,
+            "m4_incoming": round(m4_inc, 2),
+            "m4_demand": round(m4_d, 2),
+            "m4_ending": m4_end,
+            "total_incoming": total_inc,
             "total_demand": total_demand,
             "free_stock": free_stock,
             "aws": aws if aws < 999 else "No Demand",
-            "m1_demand": round(m1_d, 2),
-            "m1_ending": m1_end,
-            "m2_demand": round(m2_d, 2),
-            "m2_ending": m2_end,
-            "m3_demand": round(m3_d, 2),
-            "m3_ending": m3_end,
-            "m4_demand": round(m4_d, 2),
-            "m4_ending": m4_end,
             "aging_0_3": round(agg["aging_qty"]["0-3 months"], 2),
             "aging_3_6": round(agg["aging_qty"]["3-6 months"], 2),
             "aging_6_12": round(agg["aging_qty"]["6-12 months"], 2),

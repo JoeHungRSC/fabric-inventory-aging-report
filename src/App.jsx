@@ -754,28 +754,42 @@ export default function App() {
               <h2 className="text-sm font-bold text-slate-900">
                 4-Month Raw Material Stock Projection &amp; Demand Allocation Matrix
               </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Exploded BOM demand allocated across Nov 2026, Dec 2026, Jan 2027, and Feb 2027.
-                Ending Stock = Starting Stock + Inbound - Monthly Allocated Demand.
-              </p>
             </div>
 
             <div className="overflow-x-auto border border-slate-200 rounded-md">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold">
-                    <th className="py-2 px-3">Item Number</th>
-                    <th className="py-2 px-3">Customer</th>
-                    <th className="py-2 px-3 text-right">Standard Cost</th>
-                    <th className="py-2 px-3 text-right bg-slate-200/50">Starting Stock</th>
-                    <th className="py-2 px-3 text-right">Inbound (PO)</th>
-                    <th className="py-2 px-3 text-right">Total Demand</th>
-                    <th className="py-2 px-3 text-right">Nov 2026 End</th>
-                    <th className="py-2 px-3 text-right">Dec 2026 End</th>
-                    <th className="py-2 px-3 text-right">Jan 2027 End</th>
-                    <th className="py-2 px-3 text-right">Feb 2027 End</th>
-                    <th className="py-2 px-3 text-right font-bold text-blue-900">Free Stock</th>
-                    <th className="py-2 px-3 text-center">AWS</th>
+                    <th rowSpan={2} className="py-2.5 px-3 border-r border-slate-200">Item Number</th>
+                    <th rowSpan={2} className="py-2.5 px-3 border-r border-slate-200">Customer</th>
+                    <th rowSpan={2} className="py-2.5 px-3 text-right border-r border-slate-200">Std Cost</th>
+                    <th rowSpan={2} className="py-2.5 px-3 text-right bg-slate-200/60 font-bold border-r border-slate-300">Starting Stock</th>
+                    <th colSpan={3} className="py-1.5 px-2 text-center bg-blue-50/70 border-r border-slate-300 font-bold text-blue-950">Nov 2026</th>
+                    <th colSpan={3} className="py-1.5 px-2 text-center bg-slate-100/70 border-r border-slate-300 font-bold text-slate-900">Dec 2026</th>
+                    <th colSpan={3} className="py-1.5 px-2 text-center bg-blue-50/70 border-r border-slate-300 font-bold text-blue-950">Jan 2027</th>
+                    <th colSpan={3} className="py-1.5 px-2 text-center bg-slate-100/70 border-r border-slate-300 font-bold text-slate-900">Feb 2027</th>
+                    <th rowSpan={2} className="py-2.5 px-2.5 text-right font-semibold text-slate-700 border-r border-slate-200">Total Incoming</th>
+                    <th rowSpan={2} className="py-2.5 px-2.5 text-right font-semibold text-amber-950 border-r border-slate-200">Total Demand</th>
+                    <th rowSpan={2} className="py-2.5 px-3 text-right font-bold text-blue-900 border-r border-slate-200">Free Stock</th>
+                    <th rowSpan={2} className="py-2.5 px-2.5 text-center">AWS</th>
+                  </tr>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-[11px] text-slate-600 font-medium">
+                    {/* Nov subcolumns */}
+                    <th className="py-1 px-2 text-right bg-blue-50/40">Incoming</th>
+                    <th className="py-1 px-2 text-right bg-blue-50/40">Demand</th>
+                    <th className="py-1 px-2 text-right bg-blue-50/60 font-semibold border-r border-slate-300 text-slate-900">Ending</th>
+                    {/* Dec subcolumns */}
+                    <th className="py-1 px-2 text-right bg-slate-100/40">Incoming</th>
+                    <th className="py-1 px-2 text-right bg-slate-100/40">Demand</th>
+                    <th className="py-1 px-2 text-right bg-slate-100/60 font-semibold border-r border-slate-300 text-slate-900">Ending</th>
+                    {/* Jan subcolumns */}
+                    <th className="py-1 px-2 text-right bg-blue-50/40">Incoming</th>
+                    <th className="py-1 px-2 text-right bg-blue-50/40">Demand</th>
+                    <th className="py-1 px-2 text-right bg-blue-50/60 font-semibold border-r border-slate-300 text-slate-900">Ending</th>
+                    {/* Feb subcolumns */}
+                    <th className="py-1 px-2 text-right bg-slate-100/40">Incoming</th>
+                    <th className="py-1 px-2 text-right bg-slate-100/40">Demand</th>
+                    <th className="py-1 px-2 text-right bg-slate-100/60 font-semibold border-r border-slate-300 text-slate-900">Ending</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -783,20 +797,38 @@ export default function App() {
                     const isDeficit = p.free_stock < 0;
                     return (
                       <tr key={p.item} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-2 px-3 font-semibold text-slate-900">{p.item}</td>
-                        <td className="py-2 px-3 text-slate-700">{p.customer}</td>
-                        <td className="py-2 px-3 text-right tabular-nums text-slate-800">{formatCurrency(p.standard_cost)}</td>
-                        <td className="py-2 px-3 text-right tabular-nums font-semibold bg-slate-50 text-slate-900">{formatNumber(p.starting_stock)}</td>
-                        <td className="py-2 px-3 text-right tabular-nums text-slate-600">{formatNumber(p.incoming_stock)}</td>
-                        <td className="py-2 px-3 text-right tabular-nums font-medium text-amber-900">{formatNumber(p.total_demand)}</td>
-                        <td className={`py-2 px-3 text-right tabular-nums ${p.m1_ending < 0 ? 'text-red-700 font-bold' : 'text-slate-700'}`}>{formatNumber(p.m1_ending)}</td>
-                        <td className={`py-2 px-3 text-right tabular-nums ${p.m2_ending < 0 ? 'text-red-700 font-bold' : 'text-slate-700'}`}>{formatNumber(p.m2_ending)}</td>
-                        <td className={`py-2 px-3 text-right tabular-nums ${p.m3_ending < 0 ? 'text-red-700 font-bold' : 'text-slate-700'}`}>{formatNumber(p.m3_ending)}</td>
-                        <td className={`py-2 px-3 text-right tabular-nums ${p.m4_ending < 0 ? 'text-red-700 font-bold' : 'text-slate-700'}`}>{formatNumber(p.m4_ending)}</td>
-                        <td className={`py-2 px-3 text-right tabular-nums font-bold ${isDeficit ? 'text-red-700 bg-red-50' : 'text-emerald-800'}`}>
+                        <td className="py-2 px-3 font-semibold text-slate-900 whitespace-nowrap border-r border-slate-200">{p.item}</td>
+                        <td className="py-2 px-3 text-slate-700 whitespace-nowrap border-r border-slate-200">{p.customer}</td>
+                        <td className="py-2 px-3 text-right tabular-nums text-slate-700 border-r border-slate-200">{formatCurrency(p.standard_cost)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums font-bold bg-slate-100/60 text-slate-900 border-r border-slate-300">{formatNumber(p.starting_stock)}</td>
+
+                        {/* Nov 2026 */}
+                        <td className="py-2 px-2 text-right tabular-nums text-slate-600 bg-blue-50/20">{p.m1_incoming > 0 ? formatNumber(p.m1_incoming) : '-'}</td>
+                        <td className="py-2 px-2 text-right tabular-nums text-amber-900 bg-blue-50/20">{p.m1_demand > 0 ? formatNumber(p.m1_demand) : '-'}</td>
+                        <td className={`py-2 px-2 text-right tabular-nums font-medium bg-blue-50/30 border-r border-slate-300 ${p.m1_ending < 0 ? 'text-red-700 font-bold bg-red-50' : 'text-slate-900'}`}>{formatNumber(p.m1_ending)}</td>
+
+                        {/* Dec 2026 */}
+                        <td className="py-2 px-2 text-right tabular-nums text-slate-600">{p.m2_incoming > 0 ? formatNumber(p.m2_incoming) : '-'}</td>
+                        <td className="py-2 px-2 text-right tabular-nums text-amber-900">{p.m2_demand > 0 ? formatNumber(p.m2_demand) : '-'}</td>
+                        <td className={`py-2 px-2 text-right tabular-nums font-medium border-r border-slate-300 ${p.m2_ending < 0 ? 'text-red-700 font-bold bg-red-50' : 'text-slate-900'}`}>{formatNumber(p.m2_ending)}</td>
+
+                        {/* Jan 2027 */}
+                        <td className="py-2 px-2 text-right tabular-nums text-slate-600 bg-blue-50/20">{p.m3_incoming > 0 ? formatNumber(p.m3_incoming) : '-'}</td>
+                        <td className="py-2 px-2 text-right tabular-nums text-amber-900 bg-blue-50/20">{p.m3_demand > 0 ? formatNumber(p.m3_demand) : '-'}</td>
+                        <td className={`py-2 px-2 text-right tabular-nums font-medium bg-blue-50/30 border-r border-slate-300 ${p.m3_ending < 0 ? 'text-red-700 font-bold bg-red-50' : 'text-slate-900'}`}>{formatNumber(p.m3_ending)}</td>
+
+                        {/* Feb 2027 */}
+                        <td className="py-2 px-2 text-right tabular-nums text-slate-600">{p.m4_incoming > 0 ? formatNumber(p.m4_incoming) : '-'}</td>
+                        <td className="py-2 px-2 text-right tabular-nums text-amber-900">{p.m4_demand > 0 ? formatNumber(p.m4_demand) : '-'}</td>
+                        <td className={`py-2 px-2 text-right tabular-nums font-medium border-r border-slate-300 ${p.m4_ending < 0 ? 'text-red-700 font-bold bg-red-50' : 'text-slate-900'}`}>{formatNumber(p.m4_ending)}</td>
+
+                        {/* Summaries */}
+                        <td className="py-2 px-2.5 text-right tabular-nums font-semibold text-slate-700 border-r border-slate-200">{p.total_incoming > 0 ? formatNumber(p.total_incoming) : '-'}</td>
+                        <td className="py-2 px-2.5 text-right tabular-nums font-semibold text-amber-950 border-r border-slate-200">{p.total_demand > 0 ? formatNumber(p.total_demand) : '-'}</td>
+                        <td className={`py-2 px-3 text-right tabular-nums font-bold border-r border-slate-200 ${isDeficit ? 'text-red-700 bg-red-50' : 'text-emerald-800'}`}>
                           {formatNumber(p.free_stock)}
                         </td>
-                        <td className="py-2 px-3 text-center tabular-nums">
+                        <td className="py-2 px-2.5 text-center tabular-nums">
                           <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
                             p.aws === 'No Demand' ? 'bg-slate-100 text-slate-600' : p.aws < 4 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
                           }`}>
