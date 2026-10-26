@@ -348,10 +348,13 @@ export default function App() {
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-md bg-slate-900 text-white flex items-center justify-center font-bold text-lg tracking-wider border border-slate-800">
-              RS
+            <div className="w-11 h-11 rounded-md bg-slate-900 text-white flex items-center justify-center font-bold text-sm tracking-wider border border-slate-800 shadow-2xs">
+              RSC
             </div>
             <div>
+              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                Rochdale Spears Company
+              </div>
               <h1 className="text-xl font-bold text-slate-900 tracking-tight">
                 Fabric &amp; Leather Inventory Aging Report
               </h1>
@@ -1138,10 +1141,10 @@ export default function App() {
       <footer className="bg-white border-t border-slate-200 py-4 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
           <div>
-            Rochdale Spears Co &middot; Supply Chain &amp; Manufacturing Operations &middot; Fabric Stock &amp; Aging Control
+            Rochdale Spears Company &middot; Supply Chain &amp; Manufacturing Operations &middot; Fabric Stock &amp; Aging Control
           </div>
-          <div className="text-slate-400">
-            Exported from Power BI &amp; Dynamics 365 Supply Chain Management
+          <div className="text-slate-300 hover:text-slate-700 transition-colors duration-200 font-medium cursor-default select-none">
+            made by Joe - Hung Pham
           </div>
         </div>
       </footer>
