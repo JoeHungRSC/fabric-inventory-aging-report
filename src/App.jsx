@@ -114,8 +114,8 @@ export default function App() {
     let totalDuty = 0;
     let totalVat = 0;
     let totalTax = 0;
-    let agedCostOver90 = 0;
-    let agedTaxOver90 = 0;
+    let agedCostOver180 = 0;
+    let agedTaxOver180 = 0;
 
     for (const r of filteredRecords) {
       totalQty += r.qty;
@@ -123,13 +123,13 @@ export default function App() {
       totalDuty += r.import_duty;
       totalVat += r.vat;
       totalTax += r.total_after_tax;
-      if (r.aging_days >= 90) {
-        agedCostOver90 += r.total_cost;
-        agedTaxOver90 += r.total_after_tax;
+      if (r.aging_days >= 180) {
+        agedCostOver180 += r.total_cost;
+        agedTaxOver180 += r.total_after_tax;
       }
     }
 
-    const agedCostPct = totalCost > 0 ? (agedCostOver90 / totalCost) * 100 : 0;
+    const agedCostPct = totalCost > 0 ? (agedCostOver180 / totalCost) * 100 : 0;
 
     return {
       totalQty,
@@ -137,8 +137,8 @@ export default function App() {
       totalDuty,
       totalVat,
       totalTax,
-      agedCostOver90,
-      agedTaxOver90,
+      agedCostOver180,
+      agedTaxOver180,
       agedCostPct,
       count: filteredRecords.length,
     };
@@ -253,15 +253,15 @@ export default function App() {
           totalQty: 0,
           totalCost: 0,
           totalTax: 0,
-          agedTaxOver90: 0,
+          agedTaxOver180: 0,
         };
       }
       map[r.customer].count += 1;
       map[r.customer].totalQty += r.qty;
       map[r.customer].totalCost += r.total_cost;
       map[r.customer].totalTax += r.total_after_tax;
-      if (r.aging_days >= 90) {
-        map[r.customer].agedTaxOver90 += r.total_after_tax;
+      if (r.aging_days >= 180) {
+        map[r.customer].agedTaxOver180 += r.total_after_tax;
       }
     }
     return Object.values(map).sort((a, b) => b.totalTax - a.totalTax);
@@ -456,17 +456,17 @@ export default function App() {
 
           <div className="bg-white p-4 rounded-lg border border-amber-200 bg-amber-50/20 shadow-2xs">
             <div className="flex items-center justify-between text-xs font-semibold text-amber-900 uppercase tracking-wider">
-              <span>Aged Liability (&gt;90 Days)</span>
+              <span>Aged Liability (&gt;180 Days)</span>
               <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
                 {kpis.agedCostPct.toFixed(1)}% of Stock
               </span>
             </div>
             <div className="mt-2 text-2xl font-bold text-amber-900 tabular-nums">
-              {formatCurrency(kpis.agedTaxOver90)}
+              {formatCurrency(kpis.agedTaxOver180)}
             </div>
             <div className="mt-1 flex items-center justify-between text-xs text-slate-600">
               <span>Aged Standard Cost:</span>
-              <span className="font-semibold text-slate-800 tabular-nums">{formatCurrency(kpis.agedCostOver90)}</span>
+              <span className="font-semibold text-slate-800 tabular-nums">{formatCurrency(kpis.agedCostOver180)}</span>
             </div>
           </div>
 
@@ -543,10 +543,10 @@ export default function App() {
                 onChange={(e) => { setSelectedGroup(e.target.value); setCurrentPage(1); setProjCurrentPage(1); }}
                 className="w-full text-xs rounded-lg border-2 border-slate-300 hover:border-slate-400 bg-white text-slate-900 font-semibold py-2 px-3 focus:border-blue-700 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-colors shadow-2xs"
               >
-                <option value="ALL">All Material Groups</option>
-                {data.metadata.product_groups.map((g) => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
+                <option value="ALL">All Material Groups (3)</option>
+                <option value="RM_FABRIC">Fabric (RM_FABRIC)</option>
+                <option value="RM_LEATHER">Leather (RM_LEATHER)</option>
+                <option value="RM_PU/PVC">PU / PVC (RM_PU/PVC)</option>
               </select>
             </div>
 
@@ -764,7 +764,7 @@ export default function App() {
                   Customer Exposure &amp; Aged Liability Breakdown
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Material inventory grouped by assigned customer program. Shows aged liability (&gt;90 days) risk exposure.
+                  Material inventory grouped by assigned customer program. Shows aged liability (&gt;180 days) risk exposure.
                 </p>
               </div>
 
@@ -777,13 +777,13 @@ export default function App() {
                       <th className="py-2.5 px-4 text-right">Total Qty</th>
                       <th className="py-2.5 px-4 text-right">Standard Cost</th>
                       <th className="py-2.5 px-4 text-right">Total After Tax</th>
-                      <th className="py-2.5 px-4 text-right">Aged Liability (&gt;90d)</th>
+                      <th className="py-2.5 px-4 text-right">Aged Liability (&gt;180d)</th>
                       <th className="py-2.5 px-4 text-right">Aged Share</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {customerRiskData.map((c) => {
-                      const agedPct = c.totalTax > 0 ? (c.agedTaxOver90 / c.totalTax) * 100 : 0;
+                      const agedPct = c.totalTax > 0 ? (c.agedTaxOver180 / c.totalTax) * 100 : 0;
                       return (
                         <tr key={c.customer} className="hover:bg-slate-50/80 transition-colors">
                           <td className="py-2.5 px-4 font-semibold text-slate-900">{c.customer}</td>
@@ -791,7 +791,7 @@ export default function App() {
                           <td className="py-2.5 px-4 text-right tabular-nums text-slate-700">{formatNumber(c.totalQty)}</td>
                           <td className="py-2.5 px-4 text-right tabular-nums text-slate-800">{formatCurrency(c.totalCost)}</td>
                           <td className="py-2.5 px-4 text-right tabular-nums font-semibold text-slate-900">{formatCurrency(c.totalTax)}</td>
-                          <td className="py-2.5 px-4 text-right tabular-nums font-bold text-amber-900">{formatCurrency(c.agedTaxOver90)}</td>
+                          <td className="py-2.5 px-4 text-right tabular-nums font-bold text-amber-900">{formatCurrency(c.agedTaxOver180)}</td>
                           <td className="py-2.5 px-4 text-right tabular-nums">
                             <span className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-medium ${
                               agedPct > 70 ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-slate-100 text-slate-700'

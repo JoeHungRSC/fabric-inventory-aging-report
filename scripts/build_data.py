@@ -212,6 +212,11 @@ def main():
         if not item.startswith(("LH-01", "LH-03", "LH-07")):
             continue
 
+        prod_group = str(row[3]).strip() if row[3] else ""
+        # Only take Fabric, Leather, and PU/PVC
+        if prod_group not in ("RM_FABRIC", "RM_LEATHER", "RM_PU/PVC"):
+            continue
+
         loc = str(row[5]).strip() if row[5] else ""
         loc_upper = loc.upper()
         if "DEFECT" in loc_upper or loc_upper == "UPH WIP":
@@ -442,8 +447,8 @@ def main():
                 "import_duty": round(total_duty, 2),
                 "vat": round(total_vat, 2),
                 "total_after_tax": round(total_after_tax, 2),
-                "aged_over_90d_cost": round(sum(aging_summary[b]["cost"] for b in ["3-6 months", "6-12 months", "12-24 months", "+24 months"]), 2),
-                "aged_over_90d_tax": round(sum(aging_summary[b]["total_after_tax"] for b in ["3-6 months", "6-12 months", "12-24 months", "+24 months"]), 2)
+                "aged_over_180d_cost": round(sum(aging_summary[b]["cost"] for b in ["6-12 months", "12-24 months", "+24 months"]), 2),
+                "aged_over_180d_tax": round(sum(aging_summary[b]["total_after_tax"] for b in ["6-12 months", "12-24 months", "+24 months"]), 2)
             },
             "aging_summary": aging_summary,
             "customers": customers,
