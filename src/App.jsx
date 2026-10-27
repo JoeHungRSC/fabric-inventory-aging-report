@@ -42,11 +42,17 @@ export default function App() {
   const [selectedAging, setSelectedAging] = useState('ALL');
   const [selectedWarehouse, setSelectedWarehouse] = useState('ALL');
 
-  // Pagination & Sorting
+  // Pagination & Sorting (Explorer Table)
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [sortField, setSortField] = useState('total_after_tax');
   const [sortOrder, setSortOrder] = useState('desc'); // 'asc' | 'desc'
+
+  // Pagination & Sorting (Projection Table)
+  const [projSortField, setProjSortField] = useState('on_hand');
+  const [projSortOrder, setProjSortOrder] = useState('desc');
+  const [projCurrentPage, setProjCurrentPage] = useState(1);
+  const [projPageSize, setProjPageSize] = useState(50);
 
   // Modal inspection
   const [inspectedBatch, setInspectedBatch] = useState(null);
@@ -171,11 +177,44 @@ export default function App() {
         const q = searchQuery.toLowerCase();
         const matchItem = p.item.toLowerCase().includes(q);
         const matchDesc = p.description.toLowerCase().includes(q);
-        if (!matchItem && !matchDesc) return false;
+        const matchSupplier = (p.supplier || '').toLowerCase().includes(q);
+        if (!matchItem && !matchDesc && !matchSupplier) return false;
       }
       return true;
     });
   }, [data, selectedCustomer, searchQuery]);
+
+  // Sorted projections
+  const sortedProjections = useMemo(() => {
+    const list = [...filteredProjections];
+    list.sort((a, b) => {
+      let aVal = a[projSortField];
+      let bVal = b[projSortField];
+
+      if (projSortField === 'aws') {
+        const aNum = typeof aVal === 'number' ? aVal : -1;
+        const bNum = typeof bVal === 'number' ? bVal : -1;
+        return projSortOrder === 'asc' ? aNum - bNum : bNum - aNum;
+      }
+
+      if (typeof aVal === 'string') {
+        return projSortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      aVal = aVal || 0;
+      bVal = bVal || 0;
+      return projSortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+    return list;
+  }, [filteredProjections, projSortField, projSortOrder]);
+
+  // Paginated projections
+  const paginatedProjections = useMemo(() => {
+    if (projPageSize === -1) return sortedProjections;
+    const start = (projCurrentPage - 1) * projPageSize;
+    return sortedProjections.slice(start, start + projPageSize);
+  }, [sortedProjections, projCurrentPage, projPageSize]);
+
+  const totalProjPages = projPageSize === -1 ? 1 : (Math.ceil(sortedProjections.length / projPageSize) || 1);
 
   // Dynamic Aging Bracket Data
   const agingTierData = useMemo(() => {
@@ -228,7 +267,7 @@ export default function App() {
     return Object.values(map).sort((a, b) => b.totalTax - a.totalTax);
   }, [filteredRecords]);
 
-  // Sorting handler
+  // Sorting handler (Explorer Table)
   const handleSort = (field) => {
     if (sortField === field) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -239,6 +278,18 @@ export default function App() {
     setCurrentPage(1);
   };
 
+  // Sorting handler (Projection Table)
+  const handleProjSort = (field) => {
+    if (projSortField === field) {
+      setProjSortOrder(projSortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setProjSortField(field);
+      const isStringField = ['item', 'customer', 'supplier', 'uom', 'status'].includes(field);
+      setProjSortOrder(isStringField ? 'asc' : 'desc');
+    }
+    setProjCurrentPage(1);
+  };
+
   // Reset filters
   const resetFilters = () => {
     setSelectedCustomer('ALL');
@@ -247,6 +298,7 @@ export default function App() {
     setSelectedWarehouse('ALL');
     setSearchQuery('');
     setCurrentPage(1);
+    setProjCurrentPage(1);
   };
 
   // Export filtered view to CSV
@@ -471,7 +523,7 @@ export default function App() {
               <select
                 id="customer-filter"
                 value={selectedCustomer}
-                onChange={(e) => { setSelectedCustomer(e.target.value); setCurrentPage(1); }}
+                onChange={(e) => { setSelectedCustomer(e.target.value); setCurrentPage(1); setProjCurrentPage(1); }}
                 className="w-full text-xs rounded-lg border-2 border-slate-300 hover:border-slate-400 bg-white text-slate-900 font-semibold py-2 px-3 focus:border-blue-700 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-colors shadow-2xs"
               >
                 <option value="ALL">All Customers ({data.metadata.customers.length})</option>
@@ -488,7 +540,7 @@ export default function App() {
               <select
                 id="group-filter"
                 value={selectedGroup}
-                onChange={(e) => { setSelectedGroup(e.target.value); setCurrentPage(1); }}
+                onChange={(e) => { setSelectedGroup(e.target.value); setCurrentPage(1); setProjCurrentPage(1); }}
                 className="w-full text-xs rounded-lg border-2 border-slate-300 hover:border-slate-400 bg-white text-slate-900 font-semibold py-2 px-3 focus:border-blue-700 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-colors shadow-2xs"
               >
                 <option value="ALL">All Material Groups</option>
@@ -505,7 +557,7 @@ export default function App() {
               <select
                 id="aging-filter"
                 value={selectedAging}
-                onChange={(e) => { setSelectedAging(e.target.value); setCurrentPage(1); }}
+                onChange={(e) => { setSelectedAging(e.target.value); setCurrentPage(1); setProjCurrentPage(1); }}
                 className="w-full text-xs rounded-lg border-2 border-slate-300 hover:border-slate-400 bg-white text-slate-900 font-semibold py-2 px-3 focus:border-blue-700 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-colors shadow-2xs"
               >
                 <option value="ALL">All Periods (0 to 24+ mos)</option>
@@ -524,7 +576,7 @@ export default function App() {
               <select
                 id="warehouse-filter"
                 value={selectedWarehouse}
-                onChange={(e) => { setSelectedWarehouse(e.target.value); setCurrentPage(1); }}
+                onChange={(e) => { setSelectedWarehouse(e.target.value); setCurrentPage(1); setProjCurrentPage(1); }}
                 className="w-full text-xs rounded-lg border-2 border-slate-300 hover:border-slate-400 bg-white text-slate-900 font-semibold py-2 px-3 focus:border-blue-700 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-colors shadow-2xs"
               >
                 <option value="ALL">All Warehouses ({data.metadata.warehouses.length})</option>
@@ -543,7 +595,7 @@ export default function App() {
                 type="text"
                 placeholder="Item #, Batch, PO..."
                 value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); setProjCurrentPage(1); }}
                 className="w-full text-xs rounded-lg border-2 border-slate-300 hover:border-slate-400 bg-white text-slate-900 placeholder-slate-400 font-semibold py-2 px-3 focus:border-blue-700 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-colors shadow-2xs"
               />
             </div>
@@ -760,85 +812,323 @@ export default function App() {
         {/* View 2: Stock Projection & Balance */}
         {activeTab === 'projection' && (
           <div className="bg-white rounded-lg border border-slate-200 shadow-2xs overflow-hidden flex flex-col gap-4 p-5">
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">
-                Raw Material Stock Projection &amp; Free Stock Balance
-              </h2>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">
+                  Raw Material Stock Projection &amp; Free Stock Balance
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Click on any column header to sort ascending (↑) or descending (↓).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-600">Rows per page:</span>
+                <select
+                  value={projPageSize}
+                  onChange={(e) => { setProjPageSize(Number(e.target.value)); setProjCurrentPage(1); }}
+                  className="rounded border-slate-300 py-1 px-2 text-xs bg-white text-slate-800 shadow-2xs"
+                >
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={250}>250</option>
+                  <option value={-1}>All ({sortedProjections.length})</option>
+                </select>
+              </div>
             </div>
 
-            <div className="overflow-x-auto border border-slate-200 rounded-md">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold select-none">
-                    <th className="py-2.5 px-3">Item Number</th>
-                    <th className="py-2.5 px-3">Customer</th>
-                    <th className="py-2.5 px-3">Supplier</th>
-                    <th className="py-2.5 px-2 text-center">UOM</th>
-                    <th className="py-2.5 px-3 text-right">Std Cost</th>
-                    <th className="py-2.5 px-3 text-right bg-slate-200/50 font-bold text-slate-900">Current On-Hand</th>
-                    <th className="py-2.5 px-3 text-right font-semibold text-slate-700">Total Incoming</th>
-                    <th className="py-2.5 px-3 text-right font-semibold text-amber-900">Total Demand</th>
-                    <th className="py-2.5 px-3 text-right font-semibold text-slate-800">Balance</th>
-                    <th className="py-2.5 px-3 text-right font-bold text-blue-900 bg-blue-50/40">Final Free Stock</th>
-                    <th className="py-2.5 px-3 text-right font-medium text-slate-800">Free Stock Value</th>
-                    <th className="py-2.5 px-3 text-right font-bold text-blue-950">Post-Tax Liability</th>
-                    <th className="py-2.5 px-2.5 text-center">AWS</th>
-                    <th className="py-2.5 px-3 text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {filteredProjections.slice(0, 100).map((p) => {
-                    const isDeficit = p.free_stock < 0;
-                    return (
-                      <tr key={p.item} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-2 px-3 font-semibold text-slate-900 whitespace-nowrap">{p.item}</td>
-                        <td className="py-2 px-3 text-slate-700 whitespace-nowrap">{p.customer}</td>
-                        <td className="py-2 px-3 text-slate-500 whitespace-nowrap">{p.supplier || 'N/A'}</td>
-                        <td className="py-2 px-2 text-center text-slate-500">{p.uom}</td>
-                        <td className="py-2 px-3 text-right tabular-nums text-slate-700">{formatCurrency(p.standard_cost)}</td>
-                        <td className="py-2 px-3 text-right tabular-nums font-bold bg-slate-50 text-slate-900">{formatNumber(p.on_hand)}</td>
-                        <td className="py-2 px-3 text-right tabular-nums text-slate-600">
-                          {p.incoming > 0 ? formatNumber(p.incoming) : '-'}
-                        </td>
-                        <td className="py-2 px-3 text-right tabular-nums text-amber-900 font-medium">
-                          {p.demand > 0 ? formatNumber(p.demand) : '-'}
-                        </td>
-                        <td className={`py-2 px-3 text-right tabular-nums font-medium ${p.balance < 0 ? 'text-red-700 font-bold' : 'text-slate-800'}`}>
-                          {formatNumber(p.balance)}
-                        </td>
-                        <td className={`py-2 px-3 text-right tabular-nums font-bold bg-blue-50/30 ${isDeficit ? 'text-red-700 bg-red-50' : 'text-blue-900'}`}>
-                          {formatNumber(p.free_stock)}
-                        </td>
-                        <td className="py-2 px-3 text-right tabular-nums text-slate-800">{formatCurrency(p.free_stock_cost)}</td>
-                        <td className="py-2 px-3 text-right tabular-nums font-bold text-blue-950">{formatCurrency(p.free_stock_tax)}</td>
-                        <td className="py-2 px-2.5 text-center tabular-nums">
-                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                            p.aws === 'No Demand' ? 'bg-slate-100 text-slate-600' : p.aws < 4 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
-                          }`}>
-                            {p.aws}
+            {sortedProjections.length === 0 ? (
+              <div className="py-12 text-center text-slate-500 text-xs">
+                No matching materials found in projection scope.
+              </div>
+            ) : (
+              <div className="overflow-x-auto border border-slate-200 rounded-md">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold select-none">
+                      <th
+                        onClick={() => handleProjSort('item')}
+                        className="py-2.5 px-3 cursor-pointer hover:bg-slate-200/70 transition-colors group"
+                        title="Click to sort by Item Number"
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          Item Number
+                          <span className={projSortField === 'item' ? 'text-blue-900 font-bold' : 'text-slate-300 group-hover:text-slate-500'}>
+                            {projSortField === 'item' ? (projSortOrder === 'asc' ? '↑' : '↓') : '↕'}
                           </span>
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold ${
-                            p.status === 'Deficit'
-                              ? 'bg-red-50 text-red-800 border border-red-200'
-                              : p.status === 'Low Buffer'
-                              ? 'bg-amber-50 text-amber-900 border border-amber-200'
-                              : 'bg-emerald-50 text-emerald-900 border border-emerald-200'
-                          }`}>
-                            {p.status}
+                        </span>
+                      </th>
+
+                      <th
+                        onClick={() => handleProjSort('customer')}
+                        className="py-2.5 px-3 cursor-pointer hover:bg-slate-200/70 transition-colors group"
+                        title="Click to sort by Customer"
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          Customer
+                          <span className={projSortField === 'customer' ? 'text-blue-900 font-bold' : 'text-slate-300 group-hover:text-slate-500'}>
+                            {projSortField === 'customer' ? (projSortOrder === 'asc' ? '↑' : '↓') : '↕'}
                           </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            {filteredProjections.length > 100 && (
-              <p className="text-xs text-slate-500 text-center">
-                Displaying first 100 of {filteredProjections.length} items. Use customer/search filter to narrow down.
-              </p>
+                        </span>
+                      </th>
+
+                      <th
+                        onClick={() => handleProjSort('supplier')}
+                        className="py-2.5 px-3 cursor-pointer hover:bg-slate-200/70 transition-colors group"
+                        title="Click to sort by Supplier"
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          Supplier
+                          <span className={projSortField === 'supplier' ? 'text-blue-900 font-bold' : 'text-slate-300 group-hover:text-slate-500'}>
+                            {projSortField === 'supplier' ? (projSortOrder === 'asc' ? '↑' : '↓') : '↕'}
+                          </span>
+                        </span>
+                      </th>
+
+                      <th
+                        onClick={() => handleProjSort('uom')}
+                        className="py-2.5 px-2 text-center cursor-pointer hover:bg-slate-200/70 transition-colors group"
+                        title="Click to sort by UOM"
+                      >
+                        <span className="inline-flex items-center gap-1 justify-center">
+                          UOM
+                          <span className={projSortField === 'uom' ? 'text-blue-900 font-bold' : 'text-slate-300 group-hover:text-slate-500'}>
+                            {projSortField === 'uom' ? (projSortOrder === 'asc' ? '↑' : '↓') : '↕'}
+                          </span>
+                        </span>
+                      </th>
+
+                      <th
+                        onClick={() => handleProjSort('standard_cost')}
+                        className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-200/70 transition-colors group"
+                        title="Click to sort by Standard Cost"
+                      >
+                        <span className="inline-flex items-center gap-1 justify-end">
+                          Std Cost
+                          <span className={projSortField === 'standard_cost' ? 'text-blue-900 font-bold' : 'text-slate-300 group-hover:text-slate-500'}>
+                            {projSortField === 'standard_cost' ? (projSortOrder === 'asc' ? '↑' : '↓') : '↕'}
+                          </span>
+                        </span>
+                      </th>
+
+                      <th
+                        onClick={() => handleProjSort('on_hand')}
+                        className="py-2.5 px-3 text-right bg-slate-200/50 font-bold text-slate-900 cursor-pointer hover:bg-slate-200 transition-colors group"
+                        title="Click to sort by Current On-Hand"
+                      >
+                        <span className="inline-flex items-center gap-1 justify-end">
+                          Current On-Hand
+                          <span className={projSortField === 'on_hand' ? 'text-blue-900 font-bold' : 'text-slate-300 group-hover:text-slate-500'}>
+                            {projSortField === 'on_hand' ? (projSortOrder === 'asc' ? '↑' : '↓') : '↕'}
+                          </span>
+                        </span>
+                      </th>
+
+                      <th
+                        onClick={() => handleProjSort('incoming')}
+                        className="py-2.5 px-3 text-right font-semibold text-slate-700 cursor-pointer hover:bg-slate-200/70 transition-colors group"
+                        title="Click to sort by Total Incoming"
+                      >
+                        <span className="inline-flex items-center gap-1 justify-end">
+                          Total Incoming
+                          <span className={projSortField === 'incoming' ? 'text-blue-900 font-bold' : 'text-slate-300 group-hover:text-slate-500'}>
+                            {projSortField === 'incoming' ? (projSortOrder === 'asc' ? '↑' : '↓') : '↕'}
+                          </span>
+                        </span>
+                      </th>
+
+                      <th
+                        onClick={() => handleProjSort('demand')}
+                        className="py-2.5 px-3 text-right font-semibold text-amber-900 cursor-pointer hover:bg-slate-200/70 transition-colors group"
+                        title="Click to sort by Total Demand"
+                      >
+                        <span className="inline-flex items-center gap-1 justify-end">
+                          Total Demand
+                          <span className={projSortField === 'demand' ? 'text-blue-900 font-bold' : 'text-slate-300 group-hover:text-slate-500'}>
+                            {projSortField === 'demand' ? (projSortOrder === 'asc' ? '↑' : '↓') : '↕'}
+                          </span>
+                        </span>
+                      </th>
+
+                      <th
+                        onClick={() => handleProjSort('balance')}
+                        className="py-2.5 px-3 text-right font-semibold text-slate-800 cursor-pointer hover:bg-slate-200/70 transition-colors group"
+                        title="Click to sort by Balance"
+                      >
+                        <span className="inline-flex items-center gap-1 justify-end">
+                          Balance
+                          <span className={projSortField === 'balance' ? 'text-blue-900 font-bold' : 'text-slate-300 group-hover:text-slate-500'}>
+                            {projSortField === 'balance' ? (projSortOrder === 'asc' ? '↑' : '↓') : '↕'}
+                          </span>
+                        </span>
+                      </th>
+
+                      <th
+                        onClick={() => handleProjSort('free_stock')}
+                        className="py-2.5 px-3 text-right font-bold text-blue-900 bg-blue-50/40 cursor-pointer hover:bg-blue-100/60 transition-colors group"
+                        title="Click to sort by Final Free Stock"
+                      >
+                        <span className="inline-flex items-center gap-1 justify-end">
+                          Final Free Stock
+                          <span className={projSortField === 'free_stock' ? 'text-blue-900 font-bold' : 'text-slate-300 group-hover:text-slate-500'}>
+                            {projSortField === 'free_stock' ? (projSortOrder === 'asc' ? '↑' : '↓') : '↕'}
+                          </span>
+                        </span>
+                      </th>
+
+                      <th
+                        onClick={() => handleProjSort('free_stock_cost')}
+                        className="py-2.5 px-3 text-right font-medium text-slate-800 cursor-pointer hover:bg-slate-200/70 transition-colors group"
+                        title="Click to sort by Free Stock Value"
+                      >
+                        <span className="inline-flex items-center gap-1 justify-end">
+                          Free Stock Value
+                          <span className={projSortField === 'free_stock_cost' ? 'text-blue-900 font-bold' : 'text-slate-300 group-hover:text-slate-500'}>
+                            {projSortField === 'free_stock_cost' ? (projSortOrder === 'asc' ? '↑' : '↓') : '↕'}
+                          </span>
+                        </span>
+                      </th>
+
+                      <th
+                        onClick={() => handleProjSort('free_stock_tax')}
+                        className="py-2.5 px-3 text-right font-bold text-blue-950 cursor-pointer hover:bg-slate-200/70 transition-colors group"
+                        title="Click to sort by Post-Tax Liability"
+                      >
+                        <span className="inline-flex items-center gap-1 justify-end">
+                          Post-Tax Liability
+                          <span className={projSortField === 'free_stock_tax' ? 'text-blue-900 font-bold' : 'text-slate-300 group-hover:text-slate-500'}>
+                            {projSortField === 'free_stock_tax' ? (projSortOrder === 'asc' ? '↑' : '↓') : '↕'}
+                          </span>
+                        </span>
+                      </th>
+
+                      <th
+                        onClick={() => handleProjSort('aws')}
+                        className="py-2.5 px-2.5 text-center cursor-pointer hover:bg-slate-200/70 transition-colors group"
+                        title="Click to sort by Average Weeks of Stock"
+                      >
+                        <span className="inline-flex items-center gap-1 justify-center">
+                          AWS
+                          <span className={projSortField === 'aws' ? 'text-blue-900 font-bold' : 'text-slate-300 group-hover:text-slate-500'}>
+                            {projSortField === 'aws' ? (projSortOrder === 'asc' ? '↑' : '↓') : '↕'}
+                          </span>
+                        </span>
+                      </th>
+
+                      <th
+                        onClick={() => handleProjSort('status')}
+                        className="py-2.5 px-3 text-center cursor-pointer hover:bg-slate-200/70 transition-colors group"
+                        title="Click to sort by Status"
+                      >
+                        <span className="inline-flex items-center gap-1 justify-center">
+                          Status
+                          <span className={projSortField === 'status' ? 'text-blue-900 font-bold' : 'text-slate-300 group-hover:text-slate-500'}>
+                            {projSortField === 'status' ? (projSortOrder === 'asc' ? '↑' : '↓') : '↕'}
+                          </span>
+                        </span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {paginatedProjections.map((p) => {
+                      const isDeficit = p.free_stock < 0;
+                      return (
+                        <tr key={p.item} className="hover:bg-slate-50 transition-colors">
+                          <td className="py-2 px-3 font-semibold text-slate-900 whitespace-nowrap">{p.item}</td>
+                          <td className="py-2 px-3 text-slate-700 whitespace-nowrap">{p.customer}</td>
+                          <td className="py-2 px-3 text-slate-500 whitespace-nowrap">{p.supplier || 'N/A'}</td>
+                          <td className="py-2 px-2 text-center text-slate-500">{p.uom}</td>
+                          <td className="py-2 px-3 text-right tabular-nums text-slate-700">{formatCurrency(p.standard_cost)}</td>
+                          <td className="py-2 px-3 text-right tabular-nums font-bold bg-slate-50 text-slate-900">{formatNumber(p.on_hand)}</td>
+                          <td className="py-2 px-3 text-right tabular-nums text-slate-600">
+                            {p.incoming > 0 ? formatNumber(p.incoming) : '-'}
+                          </td>
+                          <td className="py-2 px-3 text-right tabular-nums text-amber-900 font-medium">
+                            {p.demand > 0 ? formatNumber(p.demand) : '-'}
+                          </td>
+                          <td className={`py-2 px-3 text-right tabular-nums font-medium ${p.balance < 0 ? 'text-red-700 font-bold' : 'text-slate-800'}`}>
+                            {formatNumber(p.balance)}
+                          </td>
+                          <td className={`py-2 px-3 text-right tabular-nums font-bold bg-blue-50/30 ${isDeficit ? 'text-red-700 bg-red-50' : 'text-blue-900'}`}>
+                            {formatNumber(p.free_stock)}
+                          </td>
+                          <td className="py-2 px-3 text-right tabular-nums text-slate-800">{formatCurrency(p.free_stock_cost)}</td>
+                          <td className="py-2 px-3 text-right tabular-nums font-bold text-blue-950">{formatCurrency(p.free_stock_tax)}</td>
+                          <td className="py-2 px-2.5 text-center tabular-nums">
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                              p.aws === 'No Demand' ? 'bg-slate-100 text-slate-600' : p.aws < 4 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
+                            }`}>
+                              {p.aws}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold ${
+                              p.status === 'Deficit'
+                                ? 'bg-red-50 text-red-800 border border-red-200'
+                                : p.status === 'Low Buffer'
+                                ? 'bg-amber-50 text-amber-900 border border-amber-200'
+                                : 'bg-emerald-50 text-emerald-900 border border-emerald-200'
+                            }`}>
+                              {p.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Pagination Controls for Projections */}
+            {sortedProjections.length > 0 && (
+              <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+                <div>
+                  Showing {projPageSize === -1 ? '1 to ' + sortedProjections.length.toLocaleString() : ((projCurrentPage - 1) * projPageSize + 1).toLocaleString() + ' to ' + Math.min(projCurrentPage * projPageSize, sortedProjections.length).toLocaleString()} of{' '}
+                  {sortedProjections.length.toLocaleString()} items
+                </div>
+
+                {projPageSize !== -1 && totalProjPages > 1 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={projCurrentPage === 1}
+                      onClick={() => setProjCurrentPage(1)}
+                      className="px-2.5 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+                    >
+                      First
+                    </button>
+                    <button
+                      type="button"
+                      disabled={projCurrentPage === 1}
+                      onClick={() => setProjCurrentPage((p) => Math.max(1, p - 1))}
+                      className="px-2.5 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-3 py-1 font-semibold text-slate-800">
+                      Page {projCurrentPage} of {totalProjPages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={projCurrentPage === totalProjPages}
+                      onClick={() => setProjCurrentPage((p) => Math.min(totalProjPages, p + 1))}
+                      className="px-2.5 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+                    >
+                      Next
+                    </button>
+                    <button
+                      type="button"
+                      disabled={projCurrentPage === totalProjPages}
+                      onClick={() => setProjCurrentPage(totalProjPages)}
+                      className="px-2.5 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+                    >
+                      Last
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
