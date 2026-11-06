@@ -1000,10 +1000,10 @@ export default function App() {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4 pb-3 border-b border-slate-100">
                   <div>
                     <h3 className="text-sm font-bold text-slate-900">
-                      Monthly Production Consumption Velocity (2026)
+                      Monthly Production Consumption Value (2026)
                     </h3>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Physical fabric and leather units issued into manufacturing batch orders by month.
+                      Standard cost value of fabric and leather issued into manufacturing batch orders by month.
                     </p>
                   </div>
                 </div>
@@ -1011,21 +1011,20 @@ export default function App() {
                 <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-2.5 pt-2">
                   {(() => {
                     const velocity = data.metadata.active_covers_summary.monthly_velocity;
-                    const maxUnits = Math.max(...velocity.map(v => v.units), 1);
+                    const maxValue = Math.max(...velocity.map(v => v.value), 1);
                     return velocity.map((pt) => {
-                      const heightPct = Math.max(12, Math.round((pt.units / maxUnits) * 100));
+                      const heightPct = Math.max(12, Math.round((pt.value / maxValue) * 100));
                       return (
                         <div key={pt.month} className="flex flex-col items-center bg-slate-50/70 p-2.5 rounded-lg border border-slate-200/80">
                           <span className="text-[11px] font-bold text-slate-900 tabular-nums">
-                            {formatNumber(pt.units)}
+                            {formatCurrency(pt.value)}
                           </span>
-                          <span className="text-[10px] text-slate-500">units</span>
 
                           <div className="w-full h-24 flex items-end justify-center my-2">
                             <div
                               style={{ height: `${heightPct}%` }}
                               className="w-full max-w-[36px] bg-blue-900 hover:bg-blue-800 rounded-t transition-all"
-                              title={`${pt.label}: ${formatNumber(pt.units)} units consumed across ${pt.active_skus} materials`}
+                              title={`${pt.label}: ${formatCurrency(pt.value)} consumed across ${pt.active_skus} materials`}
                             />
                           </div>
 

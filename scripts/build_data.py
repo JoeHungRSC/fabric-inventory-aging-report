@@ -486,6 +486,7 @@ def main():
                     "consumed_qty_2026": round(consumed_data["consumed_qty"], 1),
                     "prod_orders_count": consumed_data["prod_orders_count"],
                     "last_consumed_date": consumed_data["last_consumed_date"],
+                    "monthly_consumed_value": {m: round(consumed_data["monthly_consumed"][m] * r["standard_cost"], 2) for m in months_order},
                     "order_units_2026": round(order_data["total_units"], 1),
                     "open_units_2026": round(order_data["open_units"], 1),
                     "invoiced_units_2026": round(order_data["invoiced_units"], 1),
@@ -537,6 +538,7 @@ def main():
             "open_units_2026": d["open_units_2026"],
             "invoiced_units_2026": d["invoiced_units_2026"],
             "monthly_consumed": d["monthly_consumed"],
+            "monthly_consumed_value": d["monthly_consumed_value"],
             "avg_weekly_demand": round(avg_wk, 1),
             "weeks_of_supply": wos if wos < 999 else "No Orders",
             "status": status
@@ -546,12 +548,12 @@ def main():
 
     monthly_velocity = []
     for m in months_order[:-1]: # Feb to Oct (Nov is in flight)
-        m_consumed = sum(d["monthly_consumed"][m] for d in active_covers)
-        active_skus = sum(1 for d in active_covers if d["monthly_consumed"][m] > 0)
+        m_value = sum(d["monthly_consumed_value"][m] for d in active_covers)
+        active_skus = sum(1 for d in active_covers if d["monthly_consumed_value"][m] > 0)
         monthly_velocity.append({
             "month": m,
             "label": month_labels[m],
-            "units": round(m_consumed, 0),
+            "value": round(m_value, 2),
             "active_skus": active_skus
         })
 
