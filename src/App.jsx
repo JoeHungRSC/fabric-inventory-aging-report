@@ -922,35 +922,6 @@ export default function App() {
         {/* View: Active Covers (Draft) */}
         {activeTab === 'active_covers' && (
           <div className="flex flex-col gap-6">
-            {/* Scope Definition Banner */}
-            <div className="bg-blue-50/80 border-2 border-blue-200 rounded-xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-lg bg-blue-900 text-white flex items-center justify-center font-bold text-sm shrink-0">
-                  AC
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-blue-950">
-                    Active Covers Inventory &amp; Consumption Monitor
-                  </h2>
-                  <p className="text-xs text-blue-900/80 mt-1 max-w-2xl">
-                    Covers with inventory age 180 days or less and recorded production consumption in Dynamics 365 or customer orders in 2026. Consolidated view across all customer programs without separation.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold shrink-0">
-                <span className="px-2.5 py-1 rounded-md bg-white border border-blue-300 text-blue-900">
-                  D365 InventTrans Verified
-                </span>
-                <span className="px-2.5 py-1 rounded-md bg-white border border-blue-300 text-blue-900">
-                  Age &le; 180 Days
-                </span>
-                <span className="px-2.5 py-1 rounded-md bg-white border border-blue-300 text-blue-900">
-                  KA + RH Combined
-                </span>
-              </div>
-            </div>
-
             {/* Headline KPI Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-2xs">
