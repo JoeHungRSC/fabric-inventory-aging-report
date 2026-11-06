@@ -5,6 +5,8 @@ Processes:
 2. raw_data/InventoryOnHand_RSC_20261023.xlsx (D365 Standard Costs)
 3. raw_data/RM to Customer.xlsx (Customer Mapping)
 4. raw_data/RSG UPH Arhaus Aged Detail Cover_FORM.xlsx (Demand & Reference)
+5. D365_Inventory_Transactions_2026.xlsx (D365 InventTrans Production Consumption)
+6. Order_Tracker_Data_26Oct.xlsx (Order Tracker FG Demand & Customer Orders)
 
 Outputs:
 - src/data/inventory_data.json (for React dashboard)
@@ -15,6 +17,7 @@ import os
 import json
 import openpyxl
 from datetime import datetime
+from collections import defaultdict
 
 def parse_date(val):
     if val is None:
@@ -76,7 +79,6 @@ def main():
                 except:
                     pass
 
-    # Reference costs fallback
     ref_file = "raw_data/RSG UPH Arhaus Aged Detail Cover_FORM.xlsx"
     if os.path.exists(ref_file):
         wb_r = openpyxl.load_workbook(ref_file, data_only=True)
@@ -111,14 +113,11 @@ def main():
     demand_by_part = {}
     monthly_demand = {}
     monthly_incoming = {}
-    # Define 4 projection months
     proj_months = ["2026-11", "2026-12", "2027-01", "2027-02"]
 
     if os.path.exists(ref_file):
         wb_ref = openpyxl.load_workbook(ref_file, data_only=True)
         ws_dem = wb_ref["Demand"]
-        # Demand cols: Col 6 = PART NUMBER, Col 8 = RE QDATE, Col 9 = TOTAL PLANNED ISSUE QTY
-        # Incoming PO cols: Col 14 = QTYALLOCATED PO (col index 13), Col 21 = PO ETA (col index 20)
         for r in range(3, ws_dem.max_row + 1):
             part = ws_dem.cell(r, 6).value
             req_date = ws_dem.cell(r, 8).value
@@ -129,7 +128,6 @@ def main():
             if part:
                 p_key = str(part).strip().upper()
 
-                # Process Demand
                 if qty:
                     try:
                         q_val = float(qty)
@@ -137,7 +135,6 @@ def main():
                         q_val = 0.0
                     demand_by_part[p_key] = demand_by_part.get(p_key, 0.0) + q_val
 
-                    # Determine demand month
                     m_str = None
                     if req_date:
                         d_s = str(req_date).strip().upper()
@@ -154,7 +151,6 @@ def main():
                         monthly_demand[p_key] = {pm: 0.0 for pm in proj_months}
                     monthly_demand[p_key][m_str] += q_val
 
-                # Process Incoming PO
                 if po_qty:
                     try:
                         po_val = float(po_qty)
@@ -175,37 +171,99 @@ def main():
     print(f"Loaded demand for {len(demand_by_part)} distinct parts.")
     print(f"Loaded incoming POs for {len(monthly_incoming)} distinct parts.")
 
-    print("Step 4: Processing Details.xlsx...")
+    print("Step 4: Loading Production Consumption from D365 Transactions...")
+    months_order = [
+        "2026-02", "2026-03", "2026-04", "2026-05", "2026-06",
+        "2026-07", "2026-08", "2026-09", "2026-10", "2026-11"
+    ]
+    month_labels = {
+        "2026-02": "Feb 2026", "2026-03": "Mar 2026", "2026-04": "Apr 2026",
+        "2026-05": "May 2026", "2026-06": "Jun 2026", "2026-07": "Jul 2026",
+        "2026-08": "Aug 2026", "2026-09": "Sep 2026", "2026-10": "Oct 2026",
+        "2026-11": "Nov 2026"
+    }
+
+    prod_consumption = defaultdict(lambda: {
+        "consumed_qty": 0.0,
+        "prod_orders_count": 0,
+        "last_consumed_date": "",
+        "monthly_consumed": {m: 0.0 for m in months_order}
+    })
+
+    tx_files = [
+        "D365_Inventory_Transactions_2026.xlsx",
+        "raw_data/D365_Inventory_Transactions_2026.xlsx",
+        "Inventory transactions originator_639295475964065611.xlsx"
+    ]
+    tx_file = None
+    for tf in tx_files:
+        if os.path.exists(tf):
+            tx_file = tf
+            break
+
+    if tx_file:
+        print(f"Reading D365 transactions from {tx_file}...")
+        wb_tx = openpyxl.load_workbook(tx_file, read_only=True)
+        ws_tx = wb_tx[wb_tx.sheetnames[0]]
+        for r in ws_tx.iter_rows(min_row=2, values_only=True):
+            ref = str(r[3]).strip() if len(r) > 3 and r[3] else ""
+            if ref != "Production line":
+                continue
+            iss = str(r[6]).strip() if len(r) > 6 and r[6] else ""
+            if iss not in ("Sold", "Deducted"):
+                continue
+
+            it = str(r[0]).strip().upper() if len(r) > 0 and r[0] else ""
+            try:
+                qty = abs(float(r[7])) if len(r) > 7 and r[7] is not None else 0.0
+            except:
+                qty = 0.0
+
+            dt_str = str(r[1])[:10] if len(r) > 1 and r[1] else ""
+            m_str = dt_str[:7]
+
+            prod_consumption[it]["consumed_qty"] += qty
+            prod_consumption[it]["prod_orders_count"] += 1
+            if dt_str > prod_consumption[it]["last_consumed_date"]:
+                prod_consumption[it]["last_consumed_date"] = dt_str
+            if m_str in prod_consumption[it]["monthly_consumed"]:
+                prod_consumption[it]["monthly_consumed"][m_str] += qty
+
+        print(f"Loaded production consumption for {len(prod_consumption)} distinct items from D365.")
+
+    print("Step 5: Loading 2026 Order Tracker Sales Data...")
+    ot_file = "Order_Tracker_Data_26Oct.xlsx"
+    ot_sales = defaultdict(lambda: {
+        "total_units": 0.0,
+        "open_units": 0.0,
+        "invoiced_units": 0.0,
+        "orders_count": 0
+    })
+
+    if os.path.exists(ot_file):
+        wb_ot = openpyxl.load_workbook(ot_file, read_only=True)
+        ws_ot = wb_ot["Export"]
+        for r in ws_ot.iter_rows(min_row=2, values_only=True):
+            fab = str(r[20]).strip().upper() if len(r) > 20 and r[20] else ""
+            if not fab.startswith(("LH-01", "LH-03", "LH-07")):
+                continue
+            qty = float(r[43]) if len(r) > 43 and r[43] is not None else 0.0
+            st = str(r[48]).strip() if len(r) > 48 and r[48] else ""
+
+            ot_sales[fab]["total_units"] += qty
+            ot_sales[fab]["orders_count"] += 1
+            if st == "Open order":
+                ot_sales[fab]["open_units"] += qty
+            elif st == "Invoiced":
+                ot_sales[fab]["invoiced_units"] += qty
+
+        print(f"Loaded Order Tracker sales for {len(ot_sales)} distinct fabrics.")
+
+    print("Step 6: Processing Details.xlsx...")
     wb_d = openpyxl.load_workbook("Details.xlsx", read_only=True)
     ws_d = wb_d["Export"]
 
     records = []
-
-    # Details columns:
-    # 0: BATCHNUMBER
-    # 1: ITEMNUMBER
-    # 2: CONFIGURATION
-    # 3: PRODUCTGROUPID
-    # 4: WAREHOUSE
-    # 5: LOCATION
-    # 6: PHYSICALINVENTORY
-    # 7: REGISTERED
-    # 8: PHYSICALRESERVED
-    # 9: AVAILABLEPHYSICAL
-    # 10: Qty_Inspection
-    # 11: TransferQty
-    # 12: DESCRIPTION
-    # 13: PO
-    # 14: Inventtransid
-    # 15: receive_date
-    # 16: Supplier Code
-    # 17: PR
-    # 18: PR Line
-    # 19: Stanrdcost
-    # 20: MANUFACTURINGDATE
-    # 21: Aging
-    # 22: Registered_PO
-    # 23: Registered_WO
 
     for row in ws_d.iter_rows(min_row=2, values_only=True):
         item = str(row[1]).strip() if row[1] else ""
@@ -213,7 +271,6 @@ def main():
             continue
 
         prod_group = str(row[3]).strip() if row[3] else ""
-        # Only take Fabric, Leather, and PU/PVC
         if prod_group not in ("RM_FABRIC", "RM_LEATHER", "RM_PU/PVC"):
             continue
 
@@ -226,19 +283,16 @@ def main():
         item_upper = item.upper()
         batch_upper = batch.upper()
 
-        # Quantity
         try:
             qty = float(row[6]) if row[6] is not None else 0.0
         except:
             qty = 0.0
 
-        # Registered PO / Incoming
         try:
             reg_po = float(row[22]) if row[22] is not None else 0.0
         except:
             reg_po = 0.0
 
-        # Available & Reserved
         try:
             avail = float(row[9]) if row[9] is not None else 0.0
         except:
@@ -249,9 +303,7 @@ def main():
         except:
             reserved = 0.0
 
-        # Standard Cost
         cost = 0.0
-        # If COM item, cost is 0
         if "COM" in item_upper:
             cost = 0.0
         elif row[19] is not None and float(row[19]) > 0:
@@ -261,7 +313,6 @@ def main():
         elif item_upper in cost_by_item and cost_by_item[item_upper] > 0:
             cost = cost_by_item[item_upper]
 
-        # Customer Mapping
         customer = customer_map.get(item_upper)
         if not customer:
             parts = item_upper.split("-")
@@ -271,22 +322,23 @@ def main():
             else:
                 customer = "OTHERS"
 
-        # Aging in Days & Bucket
         try:
             aging_days = int(row[21]) if row[21] is not None else 0
         except:
             aging_days = 0
         aging_bucket = get_aging_bucket(aging_days)
 
-        # Financial Calculations (per NOTES.md and RSG template)
         total_cost = round(qty * cost, 2)
         import_duty = round(total_cost * 0.12, 2)
         vat = round((total_cost + import_duty) * 0.08, 2)
         total_after_tax = round(total_cost + import_duty + vat, 2)
 
-        # UOM inference
-        # LH-01 (Leather): usually SqFt or Yard; LH-03 (Fabric): Yard or Meter; LH-07: Meter
         uom = "SqFt" if item.startswith("LH-01") else ("Meter" if item.startswith("LH-07") else "Yard")
+
+        # Active status: Not aged (<=180d) AND active consumption in D365 or open orders
+        has_consumption = (item_upper in prod_consumption and prod_consumption[item_upper]["consumed_qty"] > 0)
+        has_order = (item_upper in ot_sales and ot_sales[item_upper]["total_units"] > 0)
+        is_active = (aging_days <= 180) and (has_consumption or has_order)
 
         record = {
             "batch": batch,
@@ -312,13 +364,14 @@ def main():
             "aging_days": aging_days,
             "aging_bucket": aging_bucket,
             "uom": uom,
-            "is_com": "COM" in item_upper
+            "is_com": "COM" in item_upper,
+            "is_active": is_active
         }
         records.append(record)
 
     print(f"Processed {len(records)} inventory batch records.")
 
-    # Step 5: Aggregate item-level 4-month projection matrix
+    # Step 7: Aggregate item-level projections
     item_aggregates = {}
     for r in records:
         it = r["item"].upper()
@@ -350,9 +403,6 @@ def main():
         agg["registered_po"] += r["registered_po"]
         agg["aging_qty"][r["aging_bucket"]] += r["qty"]
 
-    # Calculate Stock Projection & Balance per item (matching AR COVERS format):
-    # Balance = Current On-Hand - Total Demand
-    # Final Free Stock = Balance + Total Incoming = Current On-Hand + Total Incoming - Total Demand
     projections = []
     for it, agg in item_aggregates.items():
         start_stock = agg["total_qty"]
@@ -367,7 +417,6 @@ def main():
         balance = round(start_stock - total_demand, 2)
         free_stock = round(start_stock + total_inc - total_demand, 2)
 
-        # Average weekly consumption (AWS) = total_demand / (4 months * 4.33 weeks)
         avg_weekly_demand = (total_demand / 17.3) if total_demand > 0 else 0.0
         aws = round(start_stock / avg_weekly_demand, 1) if avg_weekly_demand > 0 else 999.0
 
@@ -403,14 +452,118 @@ def main():
             "total_after_tax": round(agg["total_after_tax"], 2)
         })
 
-    # Summary KPIs
+    # Step 8: Build Active Covers Catalog & Velocity Trend
+    active_items_map = {}
+    for r in records:
+        it = r["item"].upper()
+        if r["is_active"]:
+            if it not in active_items_map:
+                consumed_data = prod_consumption.get(it, {
+                    "consumed_qty": 0.0,
+                    "prod_orders_count": 0,
+                    "last_consumed_date": "",
+                    "monthly_consumed": {m: 0.0 for m in months_order}
+                })
+                order_data = ot_sales.get(it, {
+                    "total_units": 0.0,
+                    "open_units": 0.0,
+                    "invoiced_units": 0.0,
+                    "orders_count": 0
+                })
+
+                active_items_map[it] = {
+                    "item": r["item"],
+                    "customer": r["customer"],
+                    "description": r["description"],
+                    "supplier": r["supplier"],
+                    "product_group": r["product_group"],
+                    "uom": r["uom"],
+                    "standard_cost": r["standard_cost"],
+                    "on_hand_qty": 0.0,
+                    "batches_count": 0,
+                    "total_cost": 0.0,
+                    "total_after_tax": 0.0,
+                    "consumed_qty_2026": round(consumed_data["consumed_qty"], 1),
+                    "prod_orders_count": consumed_data["prod_orders_count"],
+                    "last_consumed_date": consumed_data["last_consumed_date"],
+                    "order_units_2026": round(order_data["total_units"], 1),
+                    "open_units_2026": round(order_data["open_units"], 1),
+                    "invoiced_units_2026": round(order_data["invoiced_units"], 1),
+                    "monthly_consumed": {m: round(consumed_data["monthly_consumed"][m], 1) for m in months_order}
+                }
+            ai = active_items_map[it]
+            ai["on_hand_qty"] += r["qty"]
+            ai["batches_count"] += 1
+            ai["total_cost"] += r["total_cost"]
+            ai["total_after_tax"] += r["total_after_tax"]
+
+    active_covers = []
+    low_buffer_count = 0
+    balanced_count = 0
+    high_buffer_count = 0
+
+    for it, d in active_items_map.items():
+        # Consumption-based runway (preferred) or order-based runway
+        effective_demand = d["consumed_qty_2026"] if d["consumed_qty_2026"] > 0 else d["order_units_2026"]
+        avg_wk = (effective_demand / 39.0) if effective_demand > 0 else 0.0
+        wos = round(d["on_hand_qty"] / avg_wk, 1) if avg_wk > 0 else 999.0
+
+        status = "High Buffer"
+        if wos < 4.0:
+            status = "Low Buffer"
+            low_buffer_count += 1
+        elif wos <= 16.0:
+            status = "Balanced"
+            balanced_count += 1
+        else:
+            high_buffer_count += 1
+
+        active_covers.append({
+            "item": d["item"],
+            "customer": d["customer"],
+            "description": d["description"],
+            "supplier": d["supplier"],
+            "product_group": d["product_group"],
+            "uom": d["uom"],
+            "standard_cost": d["standard_cost"],
+            "on_hand_qty": round(d["on_hand_qty"], 2),
+            "batches_count": d["batches_count"],
+            "total_cost": round(d["total_cost"], 2),
+            "total_after_tax": round(d["total_after_tax"], 2),
+            "consumed_qty_2026": d["consumed_qty_2026"],
+            "prod_orders_count": d["prod_orders_count"],
+            "last_consumed_date": d["last_consumed_date"] or "No D365 Pick",
+            "order_units_2026": d["order_units_2026"],
+            "open_units_2026": d["open_units_2026"],
+            "invoiced_units_2026": d["invoiced_units_2026"],
+            "monthly_consumed": d["monthly_consumed"],
+            "avg_weekly_demand": round(avg_wk, 1),
+            "weeks_of_supply": wos if wos < 999 else "No Orders",
+            "status": status
+        })
+
+    active_covers.sort(key=lambda x: x["total_cost"], reverse=True)
+
+    monthly_velocity = []
+    for m in months_order[:-1]: # Feb to Oct (Nov is in flight)
+        m_consumed = sum(d["monthly_consumed"][m] for d in active_covers)
+        active_skus = sum(1 for d in active_covers if d["monthly_consumed"][m] > 0)
+        monthly_velocity.append({
+            "month": m,
+            "label": month_labels[m],
+            "units": round(m_consumed, 0),
+            "active_skus": active_skus
+        })
+
     total_qty = sum(r["qty"] for r in records)
     total_cost = sum(r["total_cost"] for r in records)
     total_duty = sum(r["import_duty"] for r in records)
     total_vat = sum(r["vat"] for r in records)
     total_after_tax = sum(r["total_after_tax"] for r in records)
 
-    # Aging tier breakdown
+    active_cost_total = sum(d["total_cost"] for d in active_covers)
+    active_tax_total = sum(d["total_after_tax"] for d in active_covers)
+
     aging_summary = {}
     for bucket in ["0-3 months", "3-6 months", "6-12 months", "12-24 months", "+24 months"]:
         b_records = [r for r in records if r["aging_bucket"] == bucket]
@@ -430,7 +583,6 @@ def main():
             "cost_pct": round(b_cost / total_cost * 100, 1) if total_cost > 0 else 0
         }
 
-    # Customer breakdown
     customers = sorted(list(set(r["customer"] for r in records)))
     warehouses = sorted(list(set(r["warehouse"] for r in records if r["warehouse"])))
     product_groups = sorted(list(set(r["product_group"] for r in records)))
@@ -450,16 +602,28 @@ def main():
                 "aged_over_180d_cost": round(sum(aging_summary[b]["cost"] for b in ["6-12 months", "12-24 months", "+24 months"]), 2),
                 "aged_over_180d_tax": round(sum(aging_summary[b]["total_after_tax"] for b in ["6-12 months", "12-24 months", "+24 months"]), 2)
             },
+            "active_covers_summary": {
+                "total_items": len(active_covers),
+                "total_batches": sum(d["batches_count"] for d in active_covers),
+                "total_on_hand_qty": round(sum(d["on_hand_qty"] for d in active_covers), 2),
+                "total_cost": round(active_cost_total, 2),
+                "total_tax": round(active_tax_total, 2),
+                "cost_pct": round(active_cost_total / total_cost * 100, 1) if total_cost > 0 else 0.0,
+                "low_buffer_count": low_buffer_count,
+                "balanced_count": balanced_count,
+                "high_buffer_count": high_buffer_count,
+                "monthly_velocity": monthly_velocity
+            },
             "aging_summary": aging_summary,
             "customers": customers,
             "warehouses": warehouses,
             "product_groups": product_groups
         },
         "records": records,
-        "projections": projections
+        "projections": projections,
+        "active_covers": active_covers
     }
 
-    # Ensure output dirs
     os.makedirs("src/data", exist_ok=True)
     os.makedirs("public", exist_ok=True)
 
@@ -470,7 +634,8 @@ def main():
         json.dump(dataset, f, ensure_ascii=False)
 
     print("Success: Wrote inventory_data.json to src/data/ and public/")
-    print(f"Total Batches: {len(records)}, Total Valuation: ${total_cost:,.2f}, Total After Tax: ${total_after_tax:,.2f}")
+    print(f"Total Batches: {len(records)}, Active Batches: {sum(d['batches_count'] for d in active_covers)}")
+    print(f"Total Valuation: ${total_cost:,.2f}, Active Valuation: ${active_cost_total:,.2f} ({active_cost_total/total_cost*100:.1f}%)")
 
 if __name__ == "__main__":
     main()

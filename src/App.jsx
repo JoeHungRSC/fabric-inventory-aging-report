@@ -35,7 +35,7 @@ export default function App() {
   const [loadError, setLoadError] = useState(null);
 
   // Tab & Filters
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'projection' | 'explorer'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'active_covers' | 'projection' | 'explorer'
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState('ALL');
   const [selectedGroup, setSelectedGroup] = useState('ALL');
@@ -53,6 +53,14 @@ export default function App() {
   const [projSortOrder, setProjSortOrder] = useState('desc');
   const [projCurrentPage, setProjCurrentPage] = useState(1);
   const [projPageSize, setProjPageSize] = useState(50);
+
+  // Pagination & Sorting (Active Covers Table)
+  const [activeSortField, setActiveSortField] = useState('total_cost');
+  const [activeSortOrder, setActiveSortOrder] = useState('desc');
+  const [activeCurrentPage, setActiveCurrentPage] = useState(1);
+  const [activePageSize, setActivePageSize] = useState(25);
+  const [activeStatusFilter, setActiveStatusFilter] = useState('ALL'); // 'ALL' | 'Low Buffer' | 'Balanced' | 'High Buffer'
+  const [inspectedActiveCover, setInspectedActiveCover] = useState(null);
 
   // Modal inspection
   const [inspectedBatch, setInspectedBatch] = useState(null);
@@ -80,7 +88,10 @@ export default function App() {
   // Keyboard accessibility: Escape closes modal (Antislop R-32)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') setInspectedBatch(null);
+      if (e.key === 'Escape') {
+        setInspectedBatch(null);
+        setInspectedActiveCover(null);
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -216,6 +227,87 @@ export default function App() {
 
   const totalProjPages = projPageSize === -1 ? 1 : (Math.ceil(sortedProjections.length / projPageSize) || 1);
 
+  // Filtered Active Covers
+  const filteredActiveCovers = useMemo(() => {
+    if (!data?.active_covers) return [];
+    return data.active_covers.filter((c) => {
+      if (selectedCustomer !== 'ALL' && c.customer !== selectedCustomer) return false;
+      if (selectedGroup !== 'ALL' && c.product_group !== selectedGroup) return false;
+      if (activeStatusFilter !== 'ALL' && c.status !== activeStatusFilter) return false;
+      if (searchQuery.trim() !== '') {
+        const q = searchQuery.toLowerCase();
+        const matchItem = c.item.toLowerCase().includes(q);
+        const matchDesc = c.description.toLowerCase().includes(q);
+        const matchCust = c.customer.toLowerCase().includes(q);
+        const matchSupp = (c.supplier || '').toLowerCase().includes(q);
+        if (!matchItem && !matchDesc && !matchCust && !matchSupp) return false;
+      }
+      return true;
+    });
+  }, [data, selectedCustomer, selectedGroup, activeStatusFilter, searchQuery]);
+
+  // Sorted Active Covers
+  const sortedActiveCovers = useMemo(() => {
+    const list = [...filteredActiveCovers];
+    list.sort((a, b) => {
+      let aVal = a[activeSortField];
+      let bVal = b[activeSortField];
+      if (activeSortField === 'weeks_of_supply') {
+        const aNum = typeof aVal === 'number' ? aVal : 999999;
+        const bNum = typeof bVal === 'number' ? bVal : 999999;
+        return activeSortOrder === 'asc' ? aNum - bNum : bNum - aNum;
+      }
+      if (typeof aVal === 'string') {
+        return activeSortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      aVal = aVal || 0;
+      bVal = bVal || 0;
+      return activeSortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+    return list;
+  }, [filteredActiveCovers, activeSortField, activeSortOrder]);
+
+  // Paginated Active Covers
+  const paginatedActiveCovers = useMemo(() => {
+    if (activePageSize === -1) return sortedActiveCovers;
+    const start = (activeCurrentPage - 1) * activePageSize;
+    return sortedActiveCovers.slice(start, start + activePageSize);
+  }, [sortedActiveCovers, activeCurrentPage, activePageSize]);
+
+  const totalActivePages = activePageSize === -1 ? 1 : (Math.ceil(sortedActiveCovers.length / activePageSize) || 1);
+
+  // Active Covers KPIs
+  const activeKPIs = useMemo(() => {
+    const totalItems = filteredActiveCovers.length;
+    const totalCost = filteredActiveCovers.reduce((sum, c) => sum + c.total_cost, 0);
+    const totalTax = filteredActiveCovers.reduce((sum, c) => sum + c.total_after_tax, 0);
+    const totalOrders2026 = filteredActiveCovers.reduce((sum, c) => sum + c.order_units_2026, 0);
+    const lowBufferCount = filteredActiveCovers.filter((c) => c.status === 'Low Buffer').length;
+    const balancedCount = filteredActiveCovers.filter((c) => c.status === 'Balanced').length;
+    const highBufferCount = filteredActiveCovers.filter((c) => c.status === 'High Buffer').length;
+    return {
+      totalItems,
+      totalCost,
+      totalTax,
+      totalOrders2026,
+      lowBufferCount,
+      balancedCount,
+      highBufferCount,
+    };
+  }, [filteredActiveCovers]);
+
+  // Sorting handler (Active Covers Table)
+  const handleActiveSort = (field) => {
+    if (activeSortField === field) {
+      setActiveSortOrder(activeSortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setActiveSortField(field);
+      const isStringField = ['item', 'customer', 'supplier', 'product_group', 'uom', 'status'].includes(field);
+      setActiveSortOrder(isStringField ? 'asc' : 'desc');
+    }
+    setActiveCurrentPage(1);
+  };
+
   // Dynamic Aging Bracket Data
   const agingTierData = useMemo(() => {
     const tiers = ['0-3 months', '3-6 months', '6-12 months', '12-24 months', '+24 months'];
@@ -296,9 +388,11 @@ export default function App() {
     setSelectedGroup('ALL');
     setSelectedAging('ALL');
     setSelectedWarehouse('ALL');
+    setActiveStatusFilter('ALL');
     setSearchQuery('');
     setCurrentPage(1);
     setProjCurrentPage(1);
+    setActiveCurrentPage(1);
   };
 
   // Export filtered view to CSV
@@ -618,6 +712,22 @@ export default function App() {
             </button>
             <button
               type="button"
+              onClick={() => setActiveTab('active_covers')}
+              className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
+                activeTab === 'active_covers'
+                  ? 'bg-blue-900 text-white shadow-md border border-blue-950'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-300/80 shadow-2xs'
+              }`}
+            >
+              <span>Active Covers (Draft)</span>
+              <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                activeTab === 'active_covers' ? 'bg-blue-800 text-white' : 'bg-slate-100 text-slate-700'
+              }`}>
+                {filteredActiveCovers.length.toLocaleString()}
+              </span>
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('projection')}
               className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
                 activeTab === 'projection'
@@ -805,6 +915,401 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* View: Active Covers (Draft) */}
+        {activeTab === 'active_covers' && (
+          <div className="flex flex-col gap-6">
+            {/* Scope Definition Banner */}
+            <div className="bg-blue-50/80 border-2 border-blue-200 rounded-xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-blue-900 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                  AC
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-blue-950">
+                    Active Covers Inventory &amp; Consumption Monitor
+                  </h2>
+                  <p className="text-xs text-blue-900/80 mt-1 max-w-2xl">
+                    Covers with inventory age 180 days or less and recorded production consumption in Dynamics 365 or customer orders in 2026. Consolidated view across all customer programs without separation.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold shrink-0">
+                <span className="px-2.5 py-1 rounded-md bg-white border border-blue-300 text-blue-900">
+                  D365 InventTrans Verified
+                </span>
+                <span className="px-2.5 py-1 rounded-md bg-white border border-blue-300 text-blue-900">
+                  Age &le; 180 Days
+                </span>
+                <span className="px-2.5 py-1 rounded-md bg-white border border-blue-300 text-blue-900">
+                  KA + RH Combined
+                </span>
+              </div>
+            </div>
+
+            {/* Headline KPI Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-2xs">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <span>Active Stock Value</span>
+                  <span className="text-[11px] font-normal text-slate-400">Standard Cost</span>
+                </div>
+                <div className="mt-2 text-2xl font-bold text-slate-900 tabular-nums">
+                  {formatCurrency(activeKPIs.totalCost)}
+                </div>
+                <div className="mt-1 flex items-center justify-between text-xs text-slate-600">
+                  <span>Share of Total Stock:</span>
+                  <span className="font-semibold text-slate-800 tabular-nums">
+                    {((activeKPIs.totalCost / (data?.metadata?.totals?.total_cost || 1)) * 100).toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-2xs">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <span>Active Tax Liability</span>
+                  <span className="text-[11px] font-normal text-slate-400">Post-Tax</span>
+                </div>
+                <div className="mt-2 text-2xl font-bold text-blue-900 tabular-nums">
+                  {formatCurrency(activeKPIs.totalTax)}
+                </div>
+                <div className="mt-1 flex items-center justify-between text-xs text-slate-600">
+                  <span>Duty (12%) + VAT (8%):</span>
+                  <span className="font-semibold text-blue-800 tabular-nums">
+                    +{formatCurrency(activeKPIs.totalTax - activeKPIs.totalCost)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-2xs">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <span>Active Scope</span>
+                  <span className="text-[11px] font-normal text-slate-400">Catalog Count</span>
+                </div>
+                <div className="mt-2 text-2xl font-bold text-slate-900 tabular-nums">
+                  {activeKPIs.totalItems.toLocaleString()} <span className="text-sm font-normal text-slate-500">materials</span>
+                </div>
+                <div className="mt-1 flex items-center justify-between text-xs text-slate-600">
+                  <span>Inventory Batches:</span>
+                  <span className="font-semibold text-slate-800 tabular-nums">
+                    {filteredActiveCovers.reduce((s, c) => s + c.batches_count, 0).toLocaleString()} batches
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-2xs">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <span>Runway &amp; Buffer Health</span>
+                  <span className="text-[11px] font-normal text-slate-400">Weeks of Supply</span>
+                </div>
+                <div className="mt-2 text-2xl font-bold text-slate-900 tabular-nums flex items-baseline gap-2">
+                  <span className="text-red-700">{activeKPIs.lowBufferCount}</span>
+                  <span className="text-xs font-semibold text-slate-500">Low</span>
+                  <span className="text-slate-300">/</span>
+                  <span className="text-emerald-700">{activeKPIs.balancedCount}</span>
+                  <span className="text-xs font-semibold text-slate-500">Bal</span>
+                  <span className="text-slate-300">/</span>
+                  <span className="text-sky-700">{activeKPIs.highBufferCount}</span>
+                  <span className="text-xs font-semibold text-slate-500">High</span>
+                </div>
+                <div className="mt-1 flex items-center justify-between text-xs text-slate-600">
+                  <span>Low Buffer Threshold:</span>
+                  <span className="font-semibold text-red-700 tabular-nums">&lt; 4 Weeks Supply</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Monthly Production Consumption Velocity Chart */}
+            {data?.metadata?.active_covers_summary?.monthly_velocity && (
+              <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4 pb-3 border-b border-slate-100">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">
+                      Monthly Production Consumption Velocity (2026)
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Physical fabric and leather units issued into manufacturing batch orders by month from Dynamics 365.
+                    </p>
+                  </div>
+                  <div className="text-xs font-semibold text-slate-700 px-2.5 py-1 bg-slate-100 rounded border border-slate-200 self-start">
+                    Source: D365 InventTrans (Production line)
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-2.5 pt-2">
+                  {(() => {
+                    const velocity = data.metadata.active_covers_summary.monthly_velocity;
+                    const maxUnits = Math.max(...velocity.map(v => v.units), 1);
+                    return velocity.map((pt) => {
+                      const heightPct = Math.max(12, Math.round((pt.units / maxUnits) * 100));
+                      return (
+                        <div key={pt.month} className="flex flex-col items-center bg-slate-50/70 p-2.5 rounded-lg border border-slate-200/80">
+                          <span className="text-[11px] font-bold text-slate-900 tabular-nums">
+                            {formatNumber(pt.units)}
+                          </span>
+                          <span className="text-[10px] text-slate-500">units</span>
+
+                          <div className="w-full h-24 flex items-end justify-center my-2">
+                            <div
+                              style={{ height: `${heightPct}%` }}
+                              className="w-full max-w-[36px] bg-blue-900 hover:bg-blue-800 rounded-t transition-all"
+                              title={`${pt.label}: ${formatNumber(pt.units)} units consumed across ${pt.active_skus} materials`}
+                            />
+                          </div>
+
+                          <span className="text-xs font-bold text-slate-800">
+                            {pt.label.slice(0, 3)} 26
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-medium">
+                            {pt.active_skus} SKUs
+                          </span>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* Active Covers Table Section */}
+            <div className="bg-white rounded-lg border border-slate-200 shadow-2xs overflow-hidden flex flex-col gap-4 p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Active Covers Catalog ({filteredActiveCovers.length.toLocaleString()} Materials)
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Click any column header to sort. Click a material row to inspect monthly consumption and batch breakdown.
+                  </p>
+                </div>
+
+                {/* Status Filter Pills */}
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => { setActiveStatusFilter('ALL'); setActiveCurrentPage(1); }}
+                    className={`px-3 py-1 rounded-md font-semibold transition-colors ${
+                      activeStatusFilter === 'ALL'
+                        ? 'bg-blue-900 text-white shadow-2xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    All Active ({data?.active_covers?.length || 0})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveStatusFilter('Low Buffer'); setActiveCurrentPage(1); }}
+                    className={`px-3 py-1 rounded-md font-semibold transition-colors flex items-center gap-1.5 ${
+                      activeStatusFilter === 'Low Buffer'
+                        ? 'bg-red-800 text-white shadow-2xs'
+                        : 'bg-red-50 text-red-900 border border-red-200 hover:bg-red-100'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-red-600 inline-block"></span>
+                    Low Buffer ({activeKPIs.lowBufferCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveStatusFilter('Balanced'); setActiveCurrentPage(1); }}
+                    className={`px-3 py-1 rounded-md font-semibold transition-colors flex items-center gap-1.5 ${
+                      activeStatusFilter === 'Balanced'
+                        ? 'bg-emerald-800 text-white shadow-2xs'
+                        : 'bg-emerald-50 text-emerald-900 border border-emerald-200 hover:bg-emerald-100'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block"></span>
+                    Balanced ({activeKPIs.balancedCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveStatusFilter('High Buffer'); setActiveCurrentPage(1); }}
+                    className={`px-3 py-1 rounded-md font-semibold transition-colors flex items-center gap-1.5 ${
+                      activeStatusFilter === 'High Buffer'
+                        ? 'bg-sky-800 text-white shadow-2xs'
+                        : 'bg-sky-50 text-sky-900 border border-sky-200 hover:bg-sky-100'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-sky-600 inline-block"></span>
+                    High Buffer ({activeKPIs.highBufferCount})
+                  </button>
+                </div>
+              </div>
+
+              {/* Rows Per Page & Page Summary */}
+              <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+                <div className="text-slate-600">
+                  Showing {paginatedActiveCovers.length.toLocaleString()} of {filteredActiveCovers.length.toLocaleString()} materials
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-600">Rows per page:</span>
+                  <select
+                    value={activePageSize}
+                    onChange={(e) => { setActivePageSize(Number(e.target.value)); setActiveCurrentPage(1); }}
+                    className="rounded border border-slate-300 py-1 px-2 text-xs bg-white text-slate-800 shadow-2xs"
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={-1}>All ({filteredActiveCovers.length})</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Active Covers Table */}
+              <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-100/75 border-b border-slate-200 text-slate-700 font-semibold select-none">
+                      <th onClick={() => handleActiveSort('item')} className="py-2.5 px-3 cursor-pointer hover:bg-slate-200/60">
+                        Cover / Part # {activeSortField === 'item' && (activeSortOrder === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th onClick={() => handleActiveSort('customer')} className="py-2.5 px-3 cursor-pointer hover:bg-slate-200/60">
+                        Customer {activeSortField === 'customer' && (activeSortOrder === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th onClick={() => handleActiveSort('product_group')} className="py-2.5 px-2 cursor-pointer hover:bg-slate-200/60">
+                        Group {activeSortField === 'product_group' && (activeSortOrder === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th onClick={() => handleActiveSort('standard_cost')} className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-200/60">
+                        Std Cost {activeSortField === 'standard_cost' && (activeSortOrder === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th onClick={() => handleActiveSort('on_hand_qty')} className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-200/60">
+                        On-Hand Qty {activeSortField === 'on_hand_qty' && (activeSortOrder === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th onClick={() => handleActiveSort('total_cost')} className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-200/60">
+                        Stock Value {activeSortField === 'total_cost' && (activeSortOrder === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th onClick={() => handleActiveSort('total_after_tax')} className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-200/60">
+                        Post-Tax Value {activeSortField === 'total_after_tax' && (activeSortOrder === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th onClick={() => handleActiveSort('consumed_qty_2026')} className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-200/60">
+                        2026 Consumed {activeSortField === 'consumed_qty_2026' && (activeSortOrder === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th onClick={() => handleActiveSort('prod_orders_count')} className="py-2.5 px-2 text-right cursor-pointer hover:bg-slate-200/60">
+                        Prod Orders {activeSortField === 'prod_orders_count' && (activeSortOrder === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th onClick={() => handleActiveSort('last_consumed_date')} className="py-2.5 px-3 cursor-pointer hover:bg-slate-200/60">
+                        Last Pick {activeSortField === 'last_consumed_date' && (activeSortOrder === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th onClick={() => handleActiveSort('weeks_of_supply')} className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-200/60">
+                        Runway {activeSortField === 'weeks_of_supply' && (activeSortOrder === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th onClick={() => handleActiveSort('status')} className="py-2.5 px-3 text-center cursor-pointer hover:bg-slate-200/60">
+                        Status {activeSortField === 'status' && (activeSortOrder === 'asc' ? '↑' : '↓')}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {paginatedActiveCovers.map((c) => {
+                      const isSelected = inspectedActiveCover?.item === c.item;
+                      return (
+                        <tr
+                          key={c.item}
+                          onClick={() => setInspectedActiveCover(isSelected ? null : c)}
+                          className={`cursor-pointer transition-colors ${
+                            isSelected ? 'bg-blue-50/70 border-l-4 border-l-blue-900' : 'hover:bg-slate-50/90'
+                          }`}
+                        >
+                          <td className="py-2.5 px-3 font-semibold text-slate-900">
+                            <div>{c.item}</div>
+                            <div className="text-[10px] text-slate-500 font-normal truncate max-w-[200px]">
+                              {c.description || 'No description'}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-700 font-medium">{c.customer}</td>
+                          <td className="py-2.5 px-2 text-slate-600 text-[11px] font-mono">
+                            {c.product_group.replace('RM_', '')}
+                          </td>
+                          <td className="py-2.5 px-3 text-right tabular-nums text-slate-700">
+                            {formatCurrency(c.standard_cost)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-slate-900">
+                            {formatNumber(c.on_hand_qty)} <span className="text-[10px] text-slate-500 font-normal">{c.uom}</span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right tabular-nums font-bold text-slate-900">
+                            {formatCurrency(c.total_cost)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right tabular-nums font-bold text-blue-950">
+                            {formatCurrency(c.total_after_tax)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right tabular-nums text-slate-800">
+                            {formatNumber(c.consumed_qty_2026)}
+                          </td>
+                          <td className="py-2.5 px-2 text-right tabular-nums text-slate-600">
+                            {c.prod_orders_count.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 tabular-nums text-slate-600 text-[11px]">
+                            {c.last_consumed_date}
+                          </td>
+                          <td className="py-2.5 px-3 text-right tabular-nums font-semibold">
+                            {typeof c.weeks_of_supply === 'number' ? `${c.weeks_of_supply} wks` : c.weeks_of_supply}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                              c.status === 'Low Buffer'
+                                ? 'bg-red-100 text-red-900 border border-red-300'
+                                : c.status === 'Balanced'
+                                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                : 'bg-sky-100 text-sky-900 border border-sky-300'
+                            }`}>
+                              {c.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Controls */}
+              {activePageSize !== -1 && totalActivePages > 1 && (
+                <div className="flex items-center justify-between text-xs pt-3 border-t border-slate-200">
+                  <div className="text-slate-600">
+                    Page {activeCurrentPage} of {totalActivePages}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={activeCurrentPage === 1}
+                      onClick={() => setActiveCurrentPage(1)}
+                      className="px-2.5 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+                    >
+                      First
+                    </button>
+                    <button
+                      type="button"
+                      disabled={activeCurrentPage === 1}
+                      onClick={() => setActiveCurrentPage(prev => Math.max(1, prev - 1))}
+                      className="px-2.5 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+                    >
+                      Prev
+                    </button>
+                    <span className="px-3 py-1 text-slate-700 font-bold">
+                      {activeCurrentPage} / {totalActivePages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={activeCurrentPage === totalActivePages}
+                      onClick={() => setActiveCurrentPage(prev => Math.min(totalActivePages, prev + 1))}
+                      className="px-2.5 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+                    >
+                      Next
+                    </button>
+                    <button
+                      type="button"
+                      disabled={activeCurrentPage === totalActivePages}
+                      onClick={() => setActiveCurrentPage(totalActivePages)}
+                      className="px-2.5 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+                    >
+                      Last
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1139,10 +1644,10 @@ export default function App() {
             <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <h2 className="text-sm font-bold text-slate-900">
-                  Comprehensive Batch Inventory Explorer ({filteredRecords.length.toLocaleString()} Records)
+                  Batch Inventory Explorer ({filteredRecords.length.toLocaleString()} Records)
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Click on any row to open full batch provenance and transaction audit details.
+                  Select any row to inspect batch provenance, receiving dates, and tax breakdown.
                 </p>
               </div>
 
@@ -1418,6 +1923,120 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setInspectedBatch(null)}
+                className="px-4 py-1.5 text-xs font-semibold rounded bg-slate-800 text-white hover:bg-slate-900 transition-colors"
+              >
+                Close Window
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Active Cover Consumption Modal */}
+      {inspectedActiveCover && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="active-cover-modal-title"
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={(e) => { if (e.target === e.currentTarget) setInspectedActiveCover(null); }}
+        >
+          <div className="bg-white rounded-xl border border-slate-300 shadow-2xl max-w-2xl w-full p-6 text-slate-800">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-200">
+              <div>
+                <span className="text-[11px] font-bold text-blue-900 uppercase tracking-wider">
+                  Material Consumption Profile (D365)
+                </span>
+                <h3 id="active-cover-modal-title" className="text-lg font-bold text-slate-900 mt-0.5">
+                  {inspectedActiveCover.item} - {inspectedActiveCover.customer}
+                </h3>
+                <p className="text-xs text-slate-600 mt-1 font-mono">
+                  {inspectedActiveCover.description || 'No material description'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInspectedActiveCover(null)}
+                aria-label="Close modal window"
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-md hover:bg-slate-100 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <div className="text-slate-500 font-medium">On-Hand Stock</div>
+                <div className="text-base font-bold text-slate-900 mt-1 tabular-nums">
+                  {formatNumber(inspectedActiveCover.on_hand_qty)} <span className="text-xs font-normal text-slate-500">{inspectedActiveCover.uom}</span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">{inspectedActiveCover.batches_count} batches</div>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <div className="text-slate-500 font-medium">Stock Value</div>
+                <div className="text-base font-bold text-slate-900 mt-1 tabular-nums">
+                  {formatCurrency(inspectedActiveCover.total_cost)}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">Std: {formatCurrency(inspectedActiveCover.standard_cost)}/{inspectedActiveCover.uom}</div>
+              </div>
+
+              <div className="p-3 bg-blue-50/60 rounded-lg border border-blue-200">
+                <div className="text-blue-900 font-medium">Post-Tax Liability</div>
+                <div className="text-base font-bold text-blue-950 mt-1 tabular-nums">
+                  {formatCurrency(inspectedActiveCover.total_after_tax)}
+                </div>
+                <div className="text-[11px] text-blue-800 mt-0.5">Duty 12% + VAT 8%</div>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <div className="text-slate-500 font-medium">2026 Production Consumption</div>
+                <div className="text-base font-bold text-slate-900 mt-1 tabular-nums">
+                  {formatNumber(inspectedActiveCover.consumed_qty_2026)} <span className="text-xs font-normal text-slate-500">{inspectedActiveCover.uom}</span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">{inspectedActiveCover.prod_orders_count} production orders</div>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <div className="text-slate-500 font-medium">Last Production Pick</div>
+                <div className="text-base font-bold text-slate-900 mt-1 tabular-nums">
+                  {inspectedActiveCover.last_consumed_date}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">D365 InventTrans</div>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <div className="text-slate-500 font-medium">Runway Status</div>
+                <div className="text-base font-bold text-slate-900 mt-1 tabular-nums">
+                  {typeof inspectedActiveCover.weeks_of_supply === 'number' ? `${inspectedActiveCover.weeks_of_supply} wks` : inspectedActiveCover.weeks_of_supply}
+                </div>
+                <div className="text-[11px] font-semibold text-slate-600 mt-0.5">{inspectedActiveCover.status}</div>
+              </div>
+            </div>
+
+            {/* Monthly Production Pick Breakdown */}
+            <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="text-xs font-bold text-slate-800 mb-2">
+                2026 Monthly Production Pick History ({inspectedActiveCover.uom}):
+              </div>
+              <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5 text-center text-xs">
+                {Object.entries(inspectedActiveCover.monthly_consumed).map(([m, q]) => (
+                  <div key={m} className="p-2 bg-white rounded border border-slate-200 shadow-2xs">
+                    <div className="text-[10px] text-slate-500 font-semibold">{m.slice(5)}/{m.slice(2, 4)}</div>
+                    <div className={`font-bold mt-1 tabular-nums text-xs ${q > 0 ? 'text-blue-900 font-bold' : 'text-slate-400 font-normal'}`}>
+                      {q > 0 ? formatNumber(q) : '0'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setInspectedActiveCover(null)}
                 className="px-4 py-1.5 text-xs font-semibold rounded bg-slate-800 text-white hover:bg-slate-900 transition-colors"
               >
                 Close Window
