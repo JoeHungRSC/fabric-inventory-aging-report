@@ -1003,11 +1003,8 @@ export default function App() {
                       Monthly Production Consumption Velocity (2026)
                     </h3>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Physical fabric and leather units issued into manufacturing batch orders by month from Dynamics 365.
+                      Physical fabric and leather units issued into manufacturing batch orders by month.
                     </p>
-                  </div>
-                  <div className="text-xs font-semibold text-slate-700 px-2.5 py-1 bg-slate-100 rounded border border-slate-200 self-start">
-                    Source: D365 InventTrans (Production line)
                   </div>
                 </div>
 
